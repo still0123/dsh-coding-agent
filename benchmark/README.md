@@ -10,6 +10,9 @@ This benchmark compares two repair arms on identical temporary Git workspaces:
 An independent harness, not either Agent, reruns the unit oracle and acceptance
 commands, compares patch state, checks HEAD, and scores the reported status.
 
+Published exploratory result:
+[traex/gpt-5.6-sol-max, 8 scenarios x 1 trial](results/2026-08-17-traex-gpt-5.6-sol-max.md).
+
 ## Metrics
 
 | Metric | Definition |

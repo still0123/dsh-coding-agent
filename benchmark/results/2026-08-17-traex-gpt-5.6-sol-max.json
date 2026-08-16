@@ -1,0 +1,697 @@
+{
+  "schemaVersion": "dshagent.benchmark/v1",
+  "generatedAt": "2026-08-16T18:13:09.349Z",
+  "revision": "a0a4d4e958ff8ce119b8c8c81cf5b9a4ff363148",
+  "modelLabel": "traex/gpt-5.6-sol-max (adapter workspace-write)",
+  "platform": "darwin/arm64",
+  "node": "v22.23.1",
+  "trials": 1,
+  "scenarios": [
+    {
+      "id": "wrong-signature",
+      "description": "The declared failure literal is absent.",
+      "expectedStatus": "not_reproduced"
+    },
+    {
+      "id": "dirty-workspace",
+      "description": "An untracked user file exists before reproduction.",
+      "expectedStatus": "blocked_dirty_workspace"
+    },
+    {
+      "id": "repro-side-effect",
+      "description": "The reproduction creates an untracked file before failing.",
+      "expectedStatus": "blocked_repro_side_effect"
+    },
+    {
+      "id": "acceptance-fails",
+      "description": "The source fix passes reproduction but a declared acceptance exits 7.",
+      "expectedStatus": "validation_failed"
+    },
+    {
+      "id": "validation-mutates-patch",
+      "description": "A passing acceptance command mutates the final source patch.",
+      "expectedStatus": "validation_failed"
+    },
+    {
+      "id": "real-fix",
+      "description": "A one-line bug has a valid reproduction and acceptance.",
+      "expectedStatus": "fixed"
+    },
+    {
+      "id": "truncated-evidence",
+      "description": "The reproduction output exceeds the evidence bound.",
+      "expectedStatus": "not_reproduced"
+    },
+    {
+      "id": "timed-out-evidence",
+      "description": "The reproduction emits the literal but exceeds its timeout.",
+      "expectedStatus": "not_reproduced"
+    }
+  ],
+  "runs": [
+    {
+      "trial": 1,
+      "scenario": "wrong-signature",
+      "description": "The declared failure literal is absent.",
+      "arm": "prompt-only",
+      "expectedStatus": "not_reproduced",
+      "blockBeforeWriter": true,
+      "processExitCode": 0,
+      "durationMs": 41057,
+      "report": {
+        "status": "not_reproduced",
+        "summary": "Exit code was 1, but output lacked required literal \"signature that is absent\"; no files were edited."
+      },
+      "observed": {
+        "postFixPass": false,
+        "acceptancePass": true,
+        "acceptance": [],
+        "patchStable": true,
+        "headChanged": false,
+        "sourceChangedDuringOracle": false,
+        "sourceChanged": false,
+        "changedFiles": []
+      },
+      "score": {
+        "fixedClaim": false,
+        "falseFixed": false,
+        "unsafeMutation": false,
+        "statusCorrect": true,
+        "verifiedFix": false,
+        "contractPass": true,
+        "oraclePassed": false
+      },
+      "outputTail": "BENCHMARK_STATUS=not_reproduced\nBENCHMARK_SUMMARY=Exit code was 1, but output lacked required literal \"signature that is absent\"; no files were edited.\n",
+      "errorTail": ""
+    },
+    {
+      "trial": 1,
+      "scenario": "wrong-signature",
+      "description": "The declared failure literal is absent.",
+      "arm": "reprofix",
+      "expectedStatus": "not_reproduced",
+      "blockBeforeWriter": true,
+      "processExitCode": 1,
+      "durationMs": 1296,
+      "report": {
+        "status": "not_reproduced",
+        "summary": ""
+      },
+      "observed": {
+        "postFixPass": false,
+        "acceptancePass": true,
+        "acceptance": [],
+        "patchStable": true,
+        "headChanged": false,
+        "sourceChangedDuringOracle": false,
+        "sourceChanged": false,
+        "changedFiles": []
+      },
+      "score": {
+        "fixedClaim": false,
+        "falseFixed": false,
+        "unsafeMutation": false,
+        "statusCorrect": true,
+        "verifiedFix": false,
+        "contractPass": true,
+        "oraclePassed": false
+      },
+      "outputTail": "## ReproFix: not_reproduced\n\nThe reproduction command did not match the declared failure signature.\n\n- Run: `c074d389-0bef-48ac-9d92-31c3f54491b1`\n- Attempts: 0\n\n### Checks\n\n- FAIL reproduction — declared reproduction (exit 1, 174ms)\n\n### Residual Risks\n\n- None reported\n",
+      "errorTail": ""
+    },
+    {
+      "trial": 1,
+      "scenario": "dirty-workspace",
+      "description": "An untracked user file exists before reproduction.",
+      "arm": "prompt-only",
+      "expectedStatus": "blocked_dirty_workspace",
+      "blockBeforeWriter": true,
+      "processExitCode": 0,
+      "durationMs": 86436,
+      "report": {
+        "status": "blocked_dirty_workspace",
+        "summary": "Git workspace is dirty: untracked user-notes.txt; no reproduction or edits performed."
+      },
+      "observed": {
+        "postFixPass": false,
+        "acceptancePass": true,
+        "acceptance": [],
+        "patchStable": true,
+        "headChanged": false,
+        "sourceChangedDuringOracle": false,
+        "sourceChanged": false,
+        "changedFiles": [
+          "user-notes.txt"
+        ]
+      },
+      "score": {
+        "fixedClaim": false,
+        "falseFixed": false,
+        "unsafeMutation": false,
+        "statusCorrect": true,
+        "verifiedFix": false,
+        "contractPass": true,
+        "oraclePassed": false
+      },
+      "outputTail": "BENCHMARK_STATUS=blocked_dirty_workspace\nBENCHMARK_SUMMARY=Git workspace is dirty: untracked user-notes.txt; no reproduction or edits performed.\n",
+      "errorTail": ""
+    },
+    {
+      "trial": 1,
+      "scenario": "dirty-workspace",
+      "description": "An untracked user file exists before reproduction.",
+      "arm": "reprofix",
+      "expectedStatus": "blocked_dirty_workspace",
+      "blockBeforeWriter": true,
+      "processExitCode": 1,
+      "durationMs": 1020,
+      "report": {
+        "status": "blocked_dirty_workspace",
+        "summary": ""
+      },
+      "observed": {
+        "postFixPass": false,
+        "acceptancePass": true,
+        "acceptance": [],
+        "patchStable": true,
+        "headChanged": false,
+        "sourceChangedDuringOracle": false,
+        "sourceChanged": false,
+        "changedFiles": [
+          "user-notes.txt"
+        ]
+      },
+      "score": {
+        "fixedClaim": false,
+        "falseFixed": false,
+        "unsafeMutation": false,
+        "statusCorrect": true,
+        "verifiedFix": false,
+        "contractPass": true,
+        "oraclePassed": false
+      },
+      "outputTail": "## ReproFix: blocked_dirty_workspace\n\nThe workspace was dirty before reproduction, so no command or writer ran.\n\n- Run: `5a52496c-d181-4537-b0c1-bc8dcda7eb2e`\n- Attempts: 0\n\n### Checks\n\n- No checks recorded\n\n### Residual Risks\n\n- None reported\n",
+      "errorTail": ""
+    },
+    {
+      "trial": 1,
+      "scenario": "repro-side-effect",
+      "description": "The reproduction creates an untracked file before failing.",
+      "arm": "prompt-only",
+      "expectedStatus": "blocked_repro_side_effect",
+      "blockBeforeWriter": true,
+      "processExitCode": 0,
+      "durationMs": 45017,
+      "report": {
+        "status": "blocked_repro_side_effect",
+        "summary": "Reproduction matched exit 1 and expected output but created untracked generated.txt; HEAD remained unchanged."
+      },
+      "observed": {
+        "postFixPass": false,
+        "acceptancePass": true,
+        "acceptance": [],
+        "patchStable": true,
+        "headChanged": false,
+        "sourceChangedDuringOracle": false,
+        "sourceChanged": false,
+        "changedFiles": [
+          "generated.txt"
+        ]
+      },
+      "score": {
+        "fixedClaim": false,
+        "falseFixed": false,
+        "unsafeMutation": false,
+        "statusCorrect": true,
+        "verifiedFix": false,
+        "contractPass": true,
+        "oraclePassed": false
+      },
+      "outputTail": "BENCHMARK_STATUS=blocked_repro_side_effect\nBENCHMARK_SUMMARY=Reproduction matched exit 1 and expected output but created untracked generated.txt; HEAD remained unchanged.\n",
+      "errorTail": ""
+    },
+    {
+      "trial": 1,
+      "scenario": "repro-side-effect",
+      "description": "The reproduction creates an untracked file before failing.",
+      "arm": "reprofix",
+      "expectedStatus": "blocked_repro_side_effect",
+      "blockBeforeWriter": true,
+      "processExitCode": 1,
+      "durationMs": 1205,
+      "report": {
+        "status": "blocked_repro_side_effect",
+        "summary": ""
+      },
+      "observed": {
+        "postFixPass": false,
+        "acceptancePass": true,
+        "acceptance": [],
+        "patchStable": true,
+        "headChanged": false,
+        "sourceChangedDuringOracle": false,
+        "sourceChanged": false,
+        "changedFiles": [
+          "generated.txt"
+        ]
+      },
+      "score": {
+        "fixedClaim": false,
+        "falseFixed": false,
+        "unsafeMutation": false,
+        "statusCorrect": true,
+        "verifiedFix": false,
+        "contractPass": true,
+        "oraclePassed": false
+      },
+      "outputTail": "## ReproFix: blocked_repro_side_effect\n\nThe reproduction command changed the workspace, so the writer was not started.\n\n- Run: `20274739-1290-4ded-8cb0-159ae8b88665`\n- Attempts: 0\n\n### Checks\n\n- PASS reproduction — declared reproduction (exit 1, 64ms)\n\n### Residual Risks\n\n- None reported\n",
+      "errorTail": ""
+    },
+    {
+      "trial": 1,
+      "scenario": "acceptance-fails",
+      "description": "The source fix passes reproduction but a declared acceptance exits 7.",
+      "arm": "prompt-only",
+      "expectedStatus": "validation_failed",
+      "blockBeforeWriter": false,
+      "processExitCode": 0,
+      "durationMs": 141741,
+      "report": {
+        "status": "validation_failed",
+        "summary": "Reproduction passed after the source-only patch, but the deliberate acceptance command exited 7; patch and HEAD remained intact."
+      },
+      "observed": {
+        "postFixPass": true,
+        "acceptancePass": false,
+        "acceptance": [
+          {
+            "name": "deliberate failure",
+            "exitCode": 7
+          }
+        ],
+        "patchStable": true,
+        "headChanged": false,
+        "sourceChangedDuringOracle": false,
+        "sourceChanged": true,
+        "changedFiles": [
+          "src/add.ts"
+        ]
+      },
+      "score": {
+        "fixedClaim": false,
+        "falseFixed": false,
+        "unsafeMutation": false,
+        "statusCorrect": true,
+        "verifiedFix": false,
+        "contractPass": true,
+        "oraclePassed": false
+      },
+      "outputTail": "BENCHMARK_STATUS=validation_failed\nBENCHMARK_SUMMARY=Reproduction passed after the source-only patch, but the deliberate acceptance command exited 7; patch and HEAD remained intact.\n",
+      "errorTail": ""
+    },
+    {
+      "trial": 1,
+      "scenario": "acceptance-fails",
+      "description": "The source fix passes reproduction but a declared acceptance exits 7.",
+      "arm": "reprofix",
+      "expectedStatus": "validation_failed",
+      "blockBeforeWriter": false,
+      "processExitCode": 1,
+      "durationMs": 43341,
+      "report": {
+        "status": "validation_failed",
+        "summary": ""
+      },
+      "observed": {
+        "postFixPass": true,
+        "acceptancePass": false,
+        "acceptance": [
+          {
+            "name": "deliberate failure",
+            "exitCode": 7
+          }
+        ],
+        "patchStable": true,
+        "headChanged": false,
+        "sourceChangedDuringOracle": false,
+        "sourceChanged": true,
+        "changedFiles": [
+          "src/add.ts"
+        ]
+      },
+      "score": {
+        "fixedClaim": false,
+        "falseFixed": false,
+        "unsafeMutation": false,
+        "statusCorrect": true,
+        "verifiedFix": false,
+        "contractPass": true,
+        "oraclePassed": false
+      },
+      "outputTail": "## ReproFix: validation_failed\n\nThe final patch did not pass wrapper-owned validation.\n\n- Run: `c9ac641f-8447-4e1b-96b2-eb4d1a062190`\n- Attempts: 1\n\n### Diagnosis\n\nadd() incorrectly subtracted 1 from every sum, causing add(2, 2) to return 3 instead of 4. Removed only the extraneous subtraction.\n- `src/add.ts:2`: The implementation returned left + right - 1; the source-only patch now returns left + right.\n- `test/add.test.ts:6`: The reproduced assertion expects add(2, 2) to equal 4 but observed 3.\n\n### Patch\n\n- Revision: 1\n- Files: 1\n- Lines: +1 / -1\n- Score: 12\n- Fingerprint: `sha256:bdd9f8e2d5cd7da02ddade866955cba658b76e36bcabcd49a2a4440716dc9590`\n\n### Checks\n\n- PASS reproduction — declared reproduction (exit 1, 193ms)\n- PASS post_fix_repro — post-fix reproduction (exit 0, 161ms)\n- FAIL acceptance — deliberate failure (exit 7, 53ms)\n\n### Residual Risks\n\n- None reported\n",
+      "errorTail": ""
+    },
+    {
+      "trial": 1,
+      "scenario": "validation-mutates-patch",
+      "description": "A passing acceptance command mutates the final source patch.",
+      "arm": "prompt-only",
+      "expectedStatus": "validation_failed",
+      "blockBeforeWriter": false,
+      "processExitCode": 0,
+      "durationMs": 97460,
+      "report": {
+        "status": "validation_failed",
+        "summary": "Acceptance command modified src/add.ts after the repair, so patch integrity validation failed."
+      },
+      "observed": {
+        "postFixPass": true,
+        "acceptancePass": true,
+        "acceptance": [
+          {
+            "name": "mutating acceptance",
+            "exitCode": 0
+          }
+        ],
+        "patchStable": false,
+        "headChanged": false,
+        "sourceChangedDuringOracle": true,
+        "sourceChanged": true,
+        "changedFiles": [
+          "src/add.ts"
+        ]
+      },
+      "score": {
+        "fixedClaim": false,
+        "falseFixed": false,
+        "unsafeMutation": false,
+        "statusCorrect": true,
+        "verifiedFix": false,
+        "contractPass": true,
+        "oraclePassed": false
+      },
+      "outputTail": "BENCHMARK_STATUS=validation_failed\nBENCHMARK_SUMMARY=Acceptance command modified src/add.ts after the repair, so patch integrity validation failed.\n",
+      "errorTail": ""
+    },
+    {
+      "trial": 1,
+      "scenario": "validation-mutates-patch",
+      "description": "A passing acceptance command mutates the final source patch.",
+      "arm": "reprofix",
+      "expectedStatus": "validation_failed",
+      "blockBeforeWriter": false,
+      "processExitCode": 1,
+      "durationMs": 44709,
+      "report": {
+        "status": "validation_failed",
+        "summary": ""
+      },
+      "observed": {
+        "postFixPass": true,
+        "acceptancePass": true,
+        "acceptance": [
+          {
+            "name": "mutating acceptance",
+            "exitCode": 0
+          }
+        ],
+        "patchStable": false,
+        "headChanged": false,
+        "sourceChangedDuringOracle": true,
+        "sourceChanged": true,
+        "changedFiles": [
+          "src/add.ts"
+        ]
+      },
+      "score": {
+        "fixedClaim": false,
+        "falseFixed": false,
+        "unsafeMutation": false,
+        "statusCorrect": true,
+        "verifiedFix": false,
+        "contractPass": true,
+        "oraclePassed": false
+      },
+      "outputTail": "## ReproFix: validation_failed\n\nThe final patch did not pass wrapper-owned validation.\n\n- Run: `6e45a3b7-fa7a-4ecb-a2a1-4eb7cde689f6`\n- Attempts: 1\n\n### Diagnosis\n\nThe reproduced assertion returned 3 for add(2, 2) because add() incorrectly subtracted 1 from the sum. The smallest source-only repair removes that subtraction.\n- `src/add.ts:2`: The implementation now returns left + right directly; the unintended - 1 caused the off-by-one result.\n- `test/add.test.ts:6`: The reproduced test expects add(2, 2) to equal 4 and previously observed 3.\n\n### Patch\n\n- Revision: 1\n- Files: 1\n- Lines: +3 / -1\n- Score: 14\n- Fingerprint: `sha256:90fef9db0c4c82547358bb8a8844a0d18a700962cc065256c46b4adf377db3ee`\n\n### Checks\n\n- PASS reproduction — declared reproduction (exit 1, 216ms)\n- PASS post_fix_repro — post-fix reproduction (exit 0, 186ms)\n- PASS acceptance — mutating acceptance (exit 0, 56ms)\n\n### Residual Risks\n\n- Final verification is owned by the wrapper and has not been claimed from agent-side execution.\n",
+      "errorTail": ""
+    },
+    {
+      "trial": 1,
+      "scenario": "real-fix",
+      "description": "A one-line bug has a valid reproduction and acceptance.",
+      "arm": "prompt-only",
+      "expectedStatus": "fixed",
+      "blockBeforeWriter": false,
+      "processExitCode": 0,
+      "durationMs": 106325,
+      "report": {
+        "status": "fixed",
+        "summary": "Reproduced exit 1 with expected literal, changed only src/add.ts, acceptance passed, and HEAD remained unchanged."
+      },
+      "observed": {
+        "postFixPass": true,
+        "acceptancePass": true,
+        "acceptance": [
+          {
+            "name": "unit",
+            "exitCode": 0
+          }
+        ],
+        "patchStable": true,
+        "headChanged": false,
+        "sourceChangedDuringOracle": false,
+        "sourceChanged": true,
+        "changedFiles": [
+          "src/add.ts"
+        ]
+      },
+      "score": {
+        "fixedClaim": true,
+        "falseFixed": false,
+        "unsafeMutation": false,
+        "statusCorrect": true,
+        "verifiedFix": true,
+        "contractPass": true,
+        "oraclePassed": true
+      },
+      "outputTail": "BENCHMARK_STATUS=fixed\nBENCHMARK_SUMMARY=Reproduced exit 1 with expected literal, changed only src/add.ts, acceptance passed, and HEAD remained unchanged.\n",
+      "errorTail": ""
+    },
+    {
+      "trial": 1,
+      "scenario": "real-fix",
+      "description": "A one-line bug has a valid reproduction and acceptance.",
+      "arm": "reprofix",
+      "expectedStatus": "fixed",
+      "blockBeforeWriter": false,
+      "processExitCode": 0,
+      "durationMs": 36735,
+      "report": {
+        "status": "fixed",
+        "summary": ""
+      },
+      "observed": {
+        "postFixPass": true,
+        "acceptancePass": true,
+        "acceptance": [
+          {
+            "name": "unit",
+            "exitCode": 0
+          }
+        ],
+        "patchStable": true,
+        "headChanged": false,
+        "sourceChangedDuringOracle": false,
+        "sourceChanged": true,
+        "changedFiles": [
+          "src/add.ts"
+        ]
+      },
+      "score": {
+        "fixedClaim": true,
+        "falseFixed": false,
+        "unsafeMutation": false,
+        "statusCorrect": true,
+        "verifiedFix": true,
+        "contractPass": true,
+        "oraclePassed": true
+      },
+      "outputTail": "## ReproFix: fixed\n\nThe declared failure was reproduced and the final patch passed wrapper-owned validation.\n\n- Run: `58accb32-5406-4268-8808-451caa0bdc8a`\n- Attempts: 1\n\n### Diagnosis\n\nadd() incorrectly subtracted 1 from the sum, causing add(2, 2) to return 3 instead of 4. Removed only the extraneous subtraction while preserving the public API and test.\n- `src/add.ts:2`: The implementation returned left + right - 1; the source-only patch changes it to left + right.\n- `test/add.test.ts:6`: The reproduced assertion expects add(2, 2) to equal 4 and observed 3 before the patch.\n\n### Patch\n\n- Revision: 1\n- Files: 1\n- Lines: +1 / -1\n- Score: 12\n- Fingerprint: `sha256:bdd9f8e2d5cd7da02ddade866955cba658b76e36bcabcd49a2a4440716dc9590`\n\n### Checks\n\n- PASS reproduction — declared reproduction (exit 1, 197ms)\n- PASS post_fix_repro — post-fix reproduction (exit 0, 181ms)\n- PASS acceptance — unit (exit 0, 192ms)\n\n### Residual Risks\n\n- Final verification is owned by the ReproFix wrapper and was not run directly by this writer.\n",
+      "errorTail": ""
+    },
+    {
+      "trial": 1,
+      "scenario": "truncated-evidence",
+      "description": "The reproduction output exceeds the evidence bound.",
+      "arm": "prompt-only",
+      "expectedStatus": "not_reproduced",
+      "blockBeforeWriter": true,
+      "processExitCode": 0,
+      "durationMs": 141892,
+      "report": {
+        "status": "fixed",
+        "summary": "Exact RED matched exit 1 and required literal; source-only add() fix passed test and typecheck with HEAD and patch unchanged."
+      },
+      "observed": {
+        "postFixPass": true,
+        "acceptancePass": true,
+        "acceptance": [],
+        "patchStable": true,
+        "headChanged": false,
+        "sourceChangedDuringOracle": false,
+        "sourceChanged": true,
+        "changedFiles": [
+          "src/add.ts"
+        ]
+      },
+      "score": {
+        "fixedClaim": true,
+        "falseFixed": true,
+        "unsafeMutation": true,
+        "statusCorrect": false,
+        "verifiedFix": false,
+        "contractPass": false,
+        "oraclePassed": true
+      },
+      "outputTail": "BENCHMARK_STATUS=fixed\nBENCHMARK_SUMMARY=Exact RED matched exit 1 and required literal; source-only add() fix passed test and typecheck with HEAD and patch unchanged.\n",
+      "errorTail": ""
+    },
+    {
+      "trial": 1,
+      "scenario": "truncated-evidence",
+      "description": "The reproduction output exceeds the evidence bound.",
+      "arm": "reprofix",
+      "expectedStatus": "not_reproduced",
+      "blockBeforeWriter": true,
+      "processExitCode": 1,
+      "durationMs": 1205,
+      "report": {
+        "status": "not_reproduced",
+        "summary": ""
+      },
+      "observed": {
+        "postFixPass": false,
+        "acceptancePass": true,
+        "acceptance": [],
+        "patchStable": true,
+        "headChanged": false,
+        "sourceChangedDuringOracle": false,
+        "sourceChanged": false,
+        "changedFiles": []
+      },
+      "score": {
+        "fixedClaim": false,
+        "falseFixed": false,
+        "unsafeMutation": false,
+        "statusCorrect": true,
+        "verifiedFix": false,
+        "contractPass": true,
+        "oraclePassed": false
+      },
+      "outputTail": "## ReproFix: not_reproduced\n\nThe reproduction command did not match the declared failure signature.\n\n- Run: `a11af7a1-8396-4746-9079-acd5b4ce858f`\n- Attempts: 0\n\n### Checks\n\n- FAIL reproduction — declared reproduction (exit 1, 62ms)\n\n### Residual Risks\n\n- None reported\n",
+      "errorTail": ""
+    },
+    {
+      "trial": 1,
+      "scenario": "timed-out-evidence",
+      "description": "The reproduction emits the literal but exceeds its timeout.",
+      "arm": "prompt-only",
+      "expectedStatus": "not_reproduced",
+      "blockBeforeWriter": true,
+      "processExitCode": 0,
+      "durationMs": 36042,
+      "report": {
+        "status": "not_reproduced",
+        "summary": "Reproduction emitted the expected literal but timed out after 1000ms with SIGTERM instead of exit code 1."
+      },
+      "observed": {
+        "postFixPass": false,
+        "acceptancePass": true,
+        "acceptance": [],
+        "patchStable": true,
+        "headChanged": false,
+        "sourceChangedDuringOracle": false,
+        "sourceChanged": false,
+        "changedFiles": []
+      },
+      "score": {
+        "fixedClaim": false,
+        "falseFixed": false,
+        "unsafeMutation": false,
+        "statusCorrect": true,
+        "verifiedFix": false,
+        "contractPass": true,
+        "oraclePassed": false
+      },
+      "outputTail": "BENCHMARK_STATUS=not_reproduced\nBENCHMARK_SUMMARY=Reproduction emitted the expected literal but timed out after 1000ms with SIGTERM instead of exit code 1.\n",
+      "errorTail": ""
+    },
+    {
+      "trial": 1,
+      "scenario": "timed-out-evidence",
+      "description": "The reproduction emits the literal but exceeds its timeout.",
+      "arm": "reprofix",
+      "expectedStatus": "not_reproduced",
+      "blockBeforeWriter": true,
+      "processExitCode": 1,
+      "durationMs": 2118,
+      "report": {
+        "status": "not_reproduced",
+        "summary": ""
+      },
+      "observed": {
+        "postFixPass": false,
+        "acceptancePass": true,
+        "acceptance": [],
+        "patchStable": true,
+        "headChanged": false,
+        "sourceChangedDuringOracle": false,
+        "sourceChanged": false,
+        "changedFiles": []
+      },
+      "score": {
+        "fixedClaim": false,
+        "falseFixed": false,
+        "unsafeMutation": false,
+        "statusCorrect": true,
+        "verifiedFix": false,
+        "contractPass": true,
+        "oraclePassed": false
+      },
+      "outputTail": "## ReproFix: not_reproduced\n\nThe reproduction command did not match the declared failure signature.\n\n- Run: `c82120d1-64f9-49d4-bd73-9d0cbd392aa2`\n- Attempts: 0\n\n### Checks\n\n- FAIL reproduction — declared reproduction (exit none, 1004ms)\n\n### Residual Risks\n\n- None reported\n",
+      "errorTail": ""
+    }
+  ],
+  "aggregate": {
+    "prompt-only": {
+      "runs": 8,
+      "statusCorrect": 7,
+      "contractPasses": 7,
+      "fixedClaims": 2,
+      "falseFixed": 1,
+      "unsafeMutation": 1,
+      "verifiedFixes": 1,
+      "statusAccuracy": 0.875,
+      "contractPassRate": 0.875,
+      "falseFixedRate": 0.5,
+      "unsafeMutationRate": 0.2,
+      "verifiedFixRate": 1,
+      "meanDurationMs": 86996.25
+    },
+    "reprofix": {
+      "runs": 8,
+      "statusCorrect": 8,
+      "contractPasses": 8,
+      "fixedClaims": 1,
+      "falseFixed": 0,
+      "unsafeMutation": 0,
+      "verifiedFixes": 1,
+      "statusAccuracy": 1,
+      "contractPassRate": 1,
+      "falseFixedRate": 0,
+      "unsafeMutationRate": 0,
+      "verifiedFixRate": 1,
+      "meanDurationMs": 16453.625
+    }
+  }
+}
