@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
-import { readFile } from 'node:fs/promises'
+import { lstat, readFile, readlink } from 'node:fs/promises'
+import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-shell'
 import {
@@ -92,18 +93,46 @@ function porcelainPaths(status: string): string[] {
   for (let index = 0; index < entries.length; index += 1) {
     const entry = entries[index]!
     const code = entry.slice(0, 2)
-    const path = entry.slice(3)
-    if (code.includes('R') || code.includes('C')) {
-      const target = entries[index + 1]
-      if (target !== undefined) {
-        paths.push(target)
-        index += 1
-        continue
-      }
-    }
-    paths.push(path)
+    paths.push(entry.slice(3))
+    if (code.includes('R') || code.includes('C')) index += 1
   }
   return paths
+}
+
+interface NumstatSummary {
+  added: number
+  deleted: number
+  binaryFiles: string[]
+}
+
+function parseNumstat(value: string): NumstatSummary {
+  const entries = value.split('\0')
+  const binaryFiles: string[] = []
+  let added = 0
+  let deleted = 0
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index]
+    if (!entry) continue
+    const firstTab = entry.indexOf('\t')
+    const secondTab = firstTab === -1 ? -1 : entry.indexOf('\t', firstTab + 1)
+    if (firstTab === -1 || secondTab === -1) throw new Error('git numstat returned an invalid record')
+    const rawAdded = entry.slice(0, firstTab)
+    const rawDeleted = entry.slice(firstTab + 1, secondTab)
+    let path = entry.slice(secondTab + 1)
+    if (path === '') {
+      const oldPath = entries[index + 1]
+      const newPath = entries[index + 2]
+      if (!oldPath || !newPath) throw new Error('git numstat returned an incomplete rename record')
+      path = newPath
+      index += 2
+    }
+    if (rawAdded === '-' || rawDeleted === '-') binaryFiles.push(path)
+    else {
+      added += Number(rawAdded)
+      deleted += Number(rawDeleted)
+    }
+  }
+  return { added, deleted, binaryFiles }
 }
 
 function isBinary(content: Buffer): boolean {
@@ -115,6 +144,14 @@ function lineCount(content: Buffer): number {
   let lines = 0
   for (const byte of content) if (byte === 10) lines += 1
   return lines + (content.at(-1) === 10 ? 0 : 1)
+}
+
+async function readUntracked(workspaceRoot: string, path: string): Promise<Buffer> {
+  const absolute = join(workspaceRoot, path)
+  const stats = await lstat(absolute)
+  if (stats.isSymbolicLink()) return Buffer.from(await readlink(absolute))
+  if (stats.isFile()) return readFile(absolute)
+  throw new Error(`unsupported untracked file type: ${path}`)
 }
 
 export function createGitAdapter(ctx: Context): GitAdapter {
@@ -134,27 +171,16 @@ export function createGitAdapter(ctx: Context): GitAdapter {
     async patch(workspaceRoot, revision): Promise<PatchSummary> {
       const status = await gitText(runner, workspaceRoot, 'git status --porcelain=v1 -z --untracked-files=all')
       const changedFiles = [...new Set(porcelainPaths(status))].sort()
-      const numstat = await gitText(runner, workspaceRoot, 'git diff --numstat HEAD --')
-      let added = 0
-      let deleted = 0
-      const binaryFiles = new Set<string>()
-      for (const line of numstat.split('\n')) {
-        if (!line) continue
-        const [rawAdded, rawDeleted, path] = line.split('\t')
-        if (!path) continue
-        if (rawAdded === '-' || rawDeleted === '-') binaryFiles.add(path)
-        else {
-          added += Number(rawAdded)
-          deleted += Number(rawDeleted)
-        }
-      }
+      const numstat = parseNumstat(await gitText(runner, workspaceRoot, 'git diff --numstat -z HEAD --'))
+      let { added, deleted } = numstat
+      const binaryFiles = new Set(numstat.binaryFiles)
 
       const untracked = (await gitText(runner, workspaceRoot, 'git ls-files --others --exclude-standard -z'))
         .split('\0').filter(Boolean).sort()
       const hash = createHash('sha256')
       hash.update(await gitText(runner, workspaceRoot, 'git diff --binary HEAD --'))
       for (const path of untracked) {
-        const content = await readFile(`${workspaceRoot}/${path}`)
+        const content = await readUntracked(workspaceRoot, path)
         hash.update(path)
         hash.update('\0')
         hash.update(content)
