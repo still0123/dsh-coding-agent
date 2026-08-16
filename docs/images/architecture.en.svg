@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="740" viewBox="0 0 1200 740" role="img" aria-labelledby="title desc">
+  <title id="title">DSH Coding Agent architecture</title>
+  <desc id="desc">The CLI selects a Coding or ReproFix preset on the DSH runtime. ReproFix observes the failure, gates one writer, validates the final patch, and persists a receipt.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#7b8798"/>
+    </marker>
+  </defs>
+  <rect width="1200" height="740" fill="#ffffff"/>
+  <text x="60" y="56" fill="#111827" font-family="Inter,'Segoe UI',Arial,sans-serif" font-size="30" font-weight="700">Runtime ownership and request flow</text>
+  <text x="60" y="88" fill="#5f6b7a" font-family="Inter,'Segoe UI',Arial,sans-serif" font-size="16">Composition stays separate from the DSH runtime; ReproFix adds one auditable transaction.</text>
+
+  <rect x="60" y="122" width="220" height="130" rx="8" fill="#f7f9fc" stroke="#aeb8c6" stroke-width="2"/>
+  <text x="170" y="164" text-anchor="middle" fill="#111827" font-family="Inter,'Segoe UI',Arial,sans-serif" font-size="21" font-weight="700">User entry</text>
+  <text x="170" y="197" text-anchor="middle" fill="#4f5d70" font-family="SFMono-Regular,Consolas,monospace" font-size="15">dshagent run</text>
+  <text x="170" y="221" text-anchor="middle" fill="#4f5d70" font-family="SFMono-Regular,Consolas,monospace" font-size="15">dshagent repair</text>
+
+  <line x1="280" y1="187" x2="364" y2="187" stroke="#7b8798" stroke-width="3" marker-end="url(#arrow)"/>
+
+  <rect x="372" y="122" width="292" height="130" rx="8" fill="#eef5ff" stroke="#1769e0" stroke-width="2"/>
+  <text x="518" y="164" text-anchor="middle" fill="#123f7d" font-family="Inter,'Segoe UI',Arial,sans-serif" font-size="21" font-weight="700">CLI trust boundary</text>
+  <text x="518" y="197" text-anchor="middle" fill="#3c5f8c" font-family="Inter,'Segoe UI',Arial,sans-serif" font-size="15">validate + confirm repair.json</text>
+  <text x="518" y="220" text-anchor="middle" fill="#3c5f8c" font-family="Inter,'Segoe UI',Arial,sans-serif" font-size="15">canonical root + fingerprint</text>
+  <text x="518" y="243" text-anchor="middle" fill="#3c5f8c" font-family="Inter,'Segoe UI',Arial,sans-serif" font-size="15">owner-only launch context</text>
+
+  <line x1="664" y1="187" x2="740" y2="187" stroke="#7b8798" stroke-width="3" marker-end="url(#arrow)"/>
+
+  <rect x="748" y="122" width="392" height="130" rx="8" fill="#f1f8f4" stroke="#20a36a" stroke-width="2"/>
+  <text x="944" y="164" text-anchor="middle" fill="#14633f" font-family="Inter,'Segoe UI',Arial,sans-serif" font-size="21" font-weight="700">DeepSeek Harness runtime</text>
+  <text x="944" y="197" text-anchor="middle" fill="#356c54" font-family="Inter,'Segoe UI',Arial,sans-serif" font-size="15">Agent Loop | model adapters | tools | sandbox</text>
+  <text x="944" y="220" text-anchor="middle" fill="#356c54" font-family="Inter,'Segoe UI',Arial,sans-serif" font-size="15">Session log | persistence | workflow engine</text>
+  <text x="944" y="243" text-anchor="middle" fill="#356c54" font-family="Inter,'Segoe UI',Arial,sans-serif" font-size="15">Owned by DSH, not reimplemented here</text>
+
+  <path d="M 850 252 L 850 292 L 300 292 L 300 326" fill="none" stroke="#7b8798" stroke-width="3" marker-end="url(#arrow)"/>
+  <path d="M 1040 252 L 1040 292 L 890 292 L 890 326" fill="none" stroke="#7b8798" stroke-width="3" marker-end="url(#arrow)"/>
+  <text x="595" y="282" text-anchor="middle" fill="#7b8798" font-family="Inter,'Segoe UI',Arial,sans-serif" font-size="13">DSH selects one preset per session</text>
+
+  <rect x="120" y="334" width="360" height="128" rx="8" fill="#fff8e8" stroke="#d59224" stroke-width="2"/>
+  <text x="300" y="376" text-anchor="middle" fill="#825313" font-family="Inter,'Segoe UI',Arial,sans-serif" font-size="21" font-weight="700">Coding Preset</text>
+  <text x="300" y="407" text-anchor="middle" fill="#795f37" font-family="Inter,'Segoe UI',Arial,sans-serif" font-size="15">files | shell | search | skills | todo</text>
+  <text x="300" y="430" text-anchor="middle" fill="#795f37" font-family="Inter,'Segoe UI',Arial,sans-serif" font-size="15">questions + context compaction</text>
+  <text x="300" y="453" text-anchor="middle" fill="#795f37" font-family="Inter,'Segoe UI',Arial,sans-serif" font-size="15">DSH capability composition only</text>
+
+  <rect x="640" y="334" width="500" height="128" rx="8" fill="#fff1f0" stroke="#d64545" stroke-width="2"/>
+  <text x="890" y="376" text-anchor="middle" fill="#963131" font-family="Inter,'Segoe UI',Arial,sans-serif" font-size="21" font-weight="700">ReproFix Preset</text>
+  <text x="890" y="407" text-anchor="middle" fill="#7b3a3a" font-family="Inter,'Segoe UI',Arial,sans-serif" font-size="15">RED gate | one writer | no shell</text>
+  <text x="890" y="430" text-anchor="middle" fill="#7b3a3a" font-family="Inter,'Segoe UI',Arial,sans-serif" font-size="15">wrapper reruns reproduction + acceptance</text>
+  <text x="890" y="453" text-anchor="middle" fill="#7b3a3a" font-family="Inter,'Segoe UI',Arial,sans-serif" font-size="15">self-implemented repair contract</text>
+
+  <line x1="890" y1="462" x2="890" y2="498" stroke="#7b8798" stroke-width="3" marker-end="url(#arrow)"/>
+
+  <rect x="60" y="504" width="1080" height="170" rx="10" fill="#f7f9fc" stroke="#c5ccd7" stroke-width="2"/>
+  <text x="84" y="534" fill="#3c4657" font-family="Inter,'Segoe UI',Arial,sans-serif" font-size="16" font-weight="700">ReproFix transaction</text>
+
+  <text x="289" y="584" text-anchor="middle" fill="#7b8798" font-family="Inter,'Segoe UI',Arial,sans-serif" font-size="12.5">writes denied until RED</text>
+  <text x="509" y="584" text-anchor="middle" fill="#7b8798" font-family="Inter,'Segoe UI',Arial,sans-serif" font-size="12.5">writer has no shell</text>
+  <text x="730" y="584" text-anchor="middle" fill="#7b8798" font-family="Inter,'Segoe UI',Arial,sans-serif" font-size="12.5">fingerprint must hold</text>
+  <text x="945" y="584" text-anchor="middle" fill="#7b8798" font-family="Inter,'Segoe UI',Arial,sans-serif" font-size="12.5">only fixed returns ok</text>
+
+  <line x1="212" y1="600" x2="366" y2="600" stroke="#7b8798" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="432" y1="600" x2="586" y2="600" stroke="#7b8798" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="652" y1="600" x2="806" y2="600" stroke="#7b8798" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="872" y1="600" x2="1016" y2="600" stroke="#7b8798" stroke-width="3" marker-end="url(#arrow)"/>
+
+  <circle cx="180" cy="600" r="32" fill="#fff1f0" stroke="#d64545" stroke-width="3"/>
+  <circle cx="400" cy="600" r="32" fill="#eef5ff" stroke="#1769e0" stroke-width="3"/>
+  <circle cx="620" cy="600" r="32" fill="#fff8e8" stroke="#d59224" stroke-width="3"/>
+  <circle cx="840" cy="600" r="32" fill="#eaf8f1" stroke="#20a36a" stroke-width="3"/>
+  <circle cx="1050" cy="600" r="32" fill="#f1efff" stroke="#7357c7" stroke-width="3"/>
+  <text x="180" y="606" text-anchor="middle" fill="#a52f2f" font-family="Inter,'Segoe UI',Arial,sans-serif" font-size="15" font-weight="700">RED</text>
+  <text x="400" y="606" text-anchor="middle" fill="#1454ad" font-family="Inter,'Segoe UI',Arial,sans-serif" font-size="15" font-weight="700">EDIT</text>
+  <text x="620" y="606" text-anchor="middle" fill="#825313" font-family="Inter,'Segoe UI',Arial,sans-serif" font-size="15" font-weight="700">PATCH</text>
+  <text x="840" y="606" text-anchor="middle" fill="#14764c" font-family="Inter,'Segoe UI',Arial,sans-serif" font-size="15" font-weight="700">GREEN</text>
+  <text x="1050" y="606" text-anchor="middle" fill="#59429d" font-family="Inter,'Segoe UI',Arial,sans-serif" font-size="13.5" font-weight="700">RECEIPT</text>
+  <text x="180" y="656" text-anchor="middle" fill="#5f6b7a" font-family="Inter,'Segoe UI',Arial,sans-serif" font-size="13">observe failure</text>
+  <text x="400" y="656" text-anchor="middle" fill="#5f6b7a" font-family="Inter,'Segoe UI',Arial,sans-serif" font-size="13">one writer</text>
+  <text x="620" y="656" text-anchor="middle" fill="#5f6b7a" font-family="Inter,'Segoe UI',Arial,sans-serif" font-size="13">patch fingerprint</text>
+  <text x="840" y="656" text-anchor="middle" fill="#5f6b7a" font-family="Inter,'Segoe UI',Arial,sans-serif" font-size="13">wrapper reruns</text>
+  <text x="1050" y="656" text-anchor="middle" fill="#5f6b7a" font-family="Inter,'Segoe UI',Arial,sans-serif" font-size="13">audit receipt</text>
+
+  <text x="600" y="706" text-anchor="middle" fill="#5f6b7a" font-family="Inter,'Segoe UI',Arial,sans-serif" font-size="14">GREEN comes from wrapper-owned reruns — writer prose is never trusted. A cross-process workspace lock guards the canonical Git root.</text>
+</svg>

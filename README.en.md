@@ -7,7 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![DSH](https://img.shields.io/badge/DeepSeek%20Harness-0.1.0--rc.6-4e51e8)](https://github.com/deepseek-ai/deepseek-harness)
 
-![DSH Coding Agent banner](docs/images/readme-banner.svg)
+![DSH Coding Agent banner](docs/images/readme-banner.en.svg)
 
 ## When a coding agent claims "fixed", who verifies it?
 
@@ -100,7 +100,7 @@ closed instead of inferring success from incomplete evidence.
 
 ## Architecture and Ownership
 
-![DSH Coding Agent architecture](docs/images/architecture.svg)
+![DSH Coding Agent architecture](docs/images/architecture.en.svg)
 
 | DSH provides | This project implements |
 | --- | --- |
@@ -223,7 +223,7 @@ text, and does not claim JSONL streaming, Session-id output, or resume support
 Every demo copies `fixtures/buggy-project` into a fresh temporary Git repository
 and asserts the final status:
 
-![Verified ReproFix demo outcomes](docs/images/demo-results.svg)
+![Verified ReproFix demo outcomes](docs/images/demo-results.en.svg)
 
 ```bash
 pnpm demo:not-reproduced

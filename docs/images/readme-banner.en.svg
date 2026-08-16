@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="320" viewBox="0 0 1200 320" role="img" aria-labelledby="title desc">
+  <title id="title">DSH Coding Agent</title>
+  <desc id="desc">A DeepSeek Harness coding-agent distribution with an auditable ReproFix repair contract.</desc>
+  <rect width="1200" height="320" fill="#f7f9fc"/>
+  <rect x="0" y="0" width="18" height="320" fill="#1769e0"/>
+  <rect x="18" y="0" width="8" height="320" fill="#20a36a"/>
+
+  <text x="78" y="96" fill="#111827" font-family="Inter,'Segoe UI',Arial,sans-serif" font-size="48" font-weight="700">DSH Coding Agent</text>
+  <text x="78" y="143" fill="#42526b" font-family="Inter,'Segoe UI',Arial,sans-serif" font-size="23">Two presets, one auditable repair contract</text>
+  <text x="78" y="207" fill="#111827" font-family="Inter,'Segoe UI',Arial,sans-serif" font-size="20" font-weight="600">Built on DeepSeek Harness and Cordis</text>
+  <text x="78" y="242" fill="#5f6b7a" font-family="Inter,'Segoe UI',Arial,sans-serif" font-size="17">DSH owns the runtime. ReproFix owns the repair contract.</text>
+
+  <rect x="827" y="62" width="96" height="30" rx="15" fill="#ffffff" stroke="#8995a7"/>
+  <text x="875" y="82" text-anchor="middle" fill="#4f5d70" font-family="Inter,'Segoe UI',Arial,sans-serif" font-size="13" font-weight="600">no shell</text>
+  <line x1="875" y1="92" x2="875" y2="98" stroke="#8995a7" stroke-width="2"/>
+
+  <line x1="750" y1="154" x2="813" y2="154" stroke="#8995a7" stroke-width="3"/>
+  <polygon points="813,154 801,147 801,161" fill="#8995a7"/>
+  <line x1="935" y1="154" x2="998" y2="154" stroke="#8995a7" stroke-width="3"/>
+  <polygon points="998,154 986,147 986,161" fill="#8995a7"/>
+
+  <circle cx="690" cy="154" r="56" fill="#fff1f0" stroke="#d64545" stroke-width="4"/>
+  <circle cx="875" cy="154" r="56" fill="#eef5ff" stroke="#1769e0" stroke-width="4"/>
+  <circle cx="1060" cy="154" r="56" fill="#eaf8f1" stroke="#20a36a" stroke-width="4"/>
+  <text x="690" y="150" text-anchor="middle" fill="#a52f2f" font-family="Inter,'Segoe UI',Arial,sans-serif" font-size="19" font-weight="700">RED</text>
+  <text x="690" y="174" text-anchor="middle" fill="#7b3a3a" font-family="Inter,'Segoe UI',Arial,sans-serif" font-size="13">reproduce</text>
+  <text x="875" y="150" text-anchor="middle" fill="#1454ad" font-family="Inter,'Segoe UI',Arial,sans-serif" font-size="19" font-weight="700">WRITE</text>
+  <text x="875" y="174" text-anchor="middle" fill="#3c5f8c" font-family="Inter,'Segoe UI',Arial,sans-serif" font-size="13">one writer</text>
+  <text x="1060" y="150" text-anchor="middle" fill="#14764c" font-family="Inter,'Segoe UI',Arial,sans-serif" font-size="19" font-weight="700">GREEN</text>
+  <text x="1060" y="174" text-anchor="middle" fill="#356c54" font-family="Inter,'Segoe UI',Arial,sans-serif" font-size="13">rerun checks</text>
+
+  <rect x="653" y="246" width="454" height="38" rx="7" fill="#ffffff" stroke="#d8dee8"/>
+  <text x="880" y="271" text-anchor="middle" fill="#42526b" font-family="Inter,'Segoe UI',Arial,sans-serif" font-size="15">Observed failure → final patch → auditable receipt</text>
+</svg>
