@@ -1,6 +1,7 @@
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { createReadStream } from 'node:fs'
-import { lstat, readlink, realpath } from 'node:fs/promises'
+import { lstat, readlink, realpath, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-shell'
@@ -88,6 +89,32 @@ async function gitText(
   }
   if (evidence.truncated) throw new Error(`git command output exceeded ${GIT_OUTPUT_BYTES} bytes: ${command}`)
   return evidence.stdout ?? ''
+}
+
+async function gitDiffDigest(
+  runner: CommandRunner,
+  cwd: string,
+): Promise<Buffer> {
+  const diffPath = join(tmpdir(), `reprofix-diff-${randomUUID()}.patch`)
+  try {
+    const evidence = await runner.run({
+      command: `git diff --binary --output="${diffPath}" HEAD --`,
+      cwd,
+      timeoutMs: GIT_TIMEOUT_MS,
+      signal: new AbortController().signal,
+      maxOutputBytes: GIT_OUTPUT_BYTES,
+    })
+    if (!evidence.processStarted || evidence.exitCode !== 0 || evidence.timedOut || evidence.aborted || evidence.sandboxDenied) {
+      throw new Error(`git command failed: git diff --output\n${evidence.outputTail}`)
+    }
+    const hash = createHash('sha256')
+    for await (const chunk of createReadStream(diffPath)) {
+      hash.update(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+    }
+    return hash.digest()
+  } finally {
+    await rm(diffPath, { force: true })
+  }
 }
 
 function porcelainPaths(status: string): string[] {
@@ -222,9 +249,7 @@ export function createGitAdapter(ctx: Context): GitAdapter {
 
       const untracked = (await gitText(runner, workspaceRoot, 'git ls-files --others --exclude-standard -z'))
         .split('\0').filter(Boolean).sort()
-      const trackedPatchDigest = createHash('sha256')
-        .update(await gitText(runner, workspaceRoot, 'git diff --binary HEAD --'))
-        .digest()
+      const trackedPatchDigest = await gitDiffDigest(runner, workspaceRoot)
       const hash = createHash('sha256').update('reprofix.patch/v2\0').update(trackedPatchDigest)
       for (const path of untracked) {
         const summary = await summarizeUntrackedFile(workspaceRoot, path)
