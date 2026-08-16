@@ -116,6 +116,7 @@ export async function runWriterWorkflow(input: {
   }
   input.signal.addEventListener('abort', onAbort, { once: true })
   if (input.signal.aborted) onAbort()
+  let runFailure: unknown
   try {
     const result = await run.result
     const base: WorkflowAttempt = {
@@ -126,9 +127,19 @@ export async function runWriterWorkflow(input: {
     if (result.stopReason !== 'completed') return base
     if (!isWriterResult(result.value)) return { ...base, error: 'workflow returned invalid writer output' }
     return { ...base, writer: result.value }
+  } catch (error) {
+    runFailure = error
+    throw error
   } finally {
     input.signal.removeEventListener('abort', onAbort)
-    await run.dispose()
+    try {
+      await run.dispose()
+    } catch (disposeError) {
+      if (runFailure !== undefined) {
+        throw new AggregateError([runFailure, disposeError], 'workflow execution and disposal failed')
+      }
+      throw disposeError
+    }
   }
 }
 
