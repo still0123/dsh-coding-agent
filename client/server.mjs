@@ -82,12 +82,17 @@ async function existingDshLaunch(root, platform = process.platform) {
   }
 }
 
-async function createPatch() {
-  const bridge = join(packageRoot, 'dist', 'client-scope.js')
+async function createPatch(root = packageRoot) {
+  const bridge = join(root, 'dist', 'client-scope.js')
   await stat(bridge)
   const patch = join(tmpdir(), `dsh-reprofix-client-${process.pid}-${randomBytes(6).toString('hex')}.yml`)
-  await writeFile(patch, `- insert:\n    - id: reprofix-local-client\n      name: ${JSON.stringify(bridge)}\n`)
-  return patch
+  try {
+    await writeFile(patch, `- insert:\n    - id: reprofix-local-client\n      name: ${JSON.stringify(bridge)}\n`)
+    return patch
+  } catch (error) {
+    await rm(patch, { force: true })
+    throw error
+  }
 }
 
 function page(token) {
@@ -120,10 +125,10 @@ form.addEventListener('submit',async event=>{event.preventDefault();button.disab
 export async function waitForSettlement(promise, timeoutMs = 5_000) {
   let timeout
   try {
-    await Promise.race([
-      promise,
+    return await Promise.race([
+      Promise.resolve(promise).then(() => true),
       new Promise(resolvePromise => {
-        timeout = setTimeout(resolvePromise, timeoutMs)
+        timeout = setTimeout(() => resolvePromise(false), timeoutMs)
         timeout.unref?.()
       }),
     ])
@@ -132,18 +137,47 @@ export async function waitForSettlement(promise, timeoutMs = 5_000) {
   }
 }
 
+function closeServer(server) {
+  return new Promise((resolvePromise, reject) => {
+    server.close(error => {
+      if (error && error.code !== 'ERR_SERVER_NOT_RUNNING') reject(error)
+      else resolvePromise()
+    })
+  })
+}
+
 export async function createLocalClient(options = {}) {
   const token = options.token ?? randomBytes(24).toString('base64url')
   const spawnProcess = options.spawnProcess ?? spawn
-  const patch = options.patch ?? await createPatch()
   const platform = options.platform ?? process.platform
-  const launch = options.launch ?? await existingDshLaunch(options.packageRoot ?? packageRoot, platform)
+  const shutdownTimeoutMs = options.shutdownTimeoutMs ?? 5_000
+  if (!Number.isInteger(shutdownTimeoutMs) || shutdownTimeoutMs < 0) {
+    throw new Error('shutdownTimeoutMs must be a non-negative integer')
+  }
+  const ownsPatch = options.patch === undefined
+  const patch = options.patch ?? await createPatch(options.packageRoot ?? packageRoot)
+  let patchRemoved = false
+  const removeOwnedPatch = async () => {
+    if (!ownsPatch || patchRemoved) return
+    await rm(patch, { force: true })
+    patchRemoved = true
+  }
+  let launch
+  try {
+    launch = options.launch ?? await existingDshLaunch(options.packageRoot ?? packageRoot, platform)
+  } catch (error) {
+    await removeOwnedPatch()
+    throw error
+  }
   let active = false
   let activeChild
   let activeDone = Promise.resolve()
   let settleActive
+  let closing = false
+  let closePromise
   const server = createServer(async (request, response) => {
     if (!validHost(request.headers.host)) return json(response, 421, { error: 'loopback Host required' })
+    if (closing) return json(response, 503, { error: 'local client is shutting down' })
     const url = new URL(request.url ?? '/', 'http://127.0.0.1')
     if (request.method === 'GET' && url.pathname === '/') {
       response.writeHead(200, {
@@ -210,28 +244,69 @@ export async function createLocalClient(options = {}) {
       json(response, 400, { error: error instanceof Error ? error.message : String(error) })
     }
   })
-  return {
-    server,
-    token,
-    patch,
-    async listen(port = 0) {
+  let listening = false
+  const listen = async (port = 0) => {
+    if (closing) throw new Error('local client is shutting down')
+    if (listening) throw new Error('local client is already listening')
+    try {
       await new Promise((resolvePromise, reject) => {
-        server.once('error', reject)
-        server.listen(port, '127.0.0.1', resolvePromise)
+        const cleanup = () => {
+          server.off('error', onError)
+          server.off('listening', onListening)
+        }
+        const onError = (error) => { cleanup(); reject(error) }
+        const onListening = () => { cleanup(); resolvePromise() }
+        server.once('error', onError)
+        server.once('listening', onListening)
+        try {
+          server.listen(port, '127.0.0.1')
+        } catch (error) {
+          cleanup()
+          reject(error)
+        }
       })
+      listening = true
       const address = server.address()
       if (!address || typeof address === 'string') throw new Error('local client did not bind a TCP port')
       return `http://127.0.0.1:${address.port}/`
-    },
-    async close() {
-      if (activeChild?.exitCode === null) activeChild.kill()
-      await waitForSettlement(activeDone)
-      const closed = new Promise(resolvePromise => server.close(resolvePromise))
-      server.closeAllConnections?.()
-      await closed
-      if (!options.patch) await rm(patch, { force: true })
-    },
+    } catch (error) {
+      closing = true
+      await removeOwnedPatch()
+      throw error
+    }
   }
+  const close = () => {
+    if (closePromise) return closePromise
+    closing = true
+    closePromise = (async () => {
+      let failure
+      const serverClosed = closeServer(server).catch(error => { failure ??= error })
+      const child = activeChild
+      if (child?.exitCode === null) child.kill('SIGTERM')
+      let settled = await waitForSettlement(activeDone, shutdownTimeoutMs)
+      if (!settled && child?.exitCode === null) {
+        child.kill('SIGKILL')
+        settled = await waitForSettlement(activeDone, shutdownTimeoutMs)
+      }
+      if (!settled) {
+        active = false
+        activeChild = undefined
+        settleActive?.()
+        settleActive = undefined
+        failure ??= new Error('DSH child did not exit after SIGKILL')
+      }
+      server.closeAllConnections?.()
+      await serverClosed
+      try {
+        await removeOwnedPatch()
+      } catch (error) {
+        failure ??= error
+      }
+      if (failure) throw failure
+    })()
+    return closePromise
+  }
+  return { server, token, patch, listen, close }
 }
 
 function usage() {

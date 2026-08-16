@@ -5,6 +5,10 @@ import { SessionId } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { EventEmitter } from 'node:events'
+import { mkdir, mkdtemp, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import { createServer as createHttpServer } from 'node:http'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
 import { buildPrompt, createLocalClient, dshLaunch, validHost, waitForSettlement } from '../client/server.mjs'
@@ -111,6 +115,52 @@ describe('local client', () => {
     expect(() => dshLaunch(undefined, 'win32')).toThrow(/Windows requires @deepseek-ai\/dsh/)
   })
 
+  it('removes its generated patch when Windows launch discovery fails', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'reprofix-client-init-'))
+    const prefix = `dsh-reprofix-client-${process.pid}-`
+    const before = (await readdir(tmpdir())).filter(name => name.startsWith(prefix)).sort()
+    const configuredEntry = process.env.DSH_NODE_ENTRY
+    try {
+      await mkdir(join(root, 'dist'), { recursive: true })
+      await writeFile(join(root, 'dist', 'client-scope.js'), 'export {}\n')
+      await writeFile(join(root, 'package.json'), '{"name":"isolated-client-test"}\n')
+      delete process.env.DSH_NODE_ENTRY
+      await expect(createLocalClient({ packageRoot: root, platform: 'win32' })).rejects.toThrow()
+      const after = (await readdir(tmpdir())).filter(name => name.startsWith(prefix)).sort()
+      expect(after).toEqual(before)
+    } finally {
+      if (configuredEntry === undefined) delete process.env.DSH_NODE_ENTRY
+      else process.env.DSH_NODE_ENTRY = configuredEntry
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('removes its generated patch when the requested port is unavailable', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'reprofix-client-listen-'))
+    const occupied = createHttpServer()
+    await mkdir(join(root, 'dist'), { recursive: true })
+    await writeFile(join(root, 'dist', 'client-scope.js'), 'export {}\n')
+    await new Promise<void>((resolvePromise, reject) => {
+      occupied.once('error', reject)
+      occupied.listen(0, '127.0.0.1', resolvePromise)
+    })
+    const address = occupied.address()
+    if (!address || typeof address === 'string') throw new Error('test server did not bind')
+    const client = await createLocalClient({
+      packageRoot: root,
+      launch: { command: process.execPath, prefixArgs: ['/opt/dsh/lib/bin.js'] },
+    })
+    try {
+      await stat(client.patch)
+      await expect(client.listen(address.port)).rejects.toMatchObject({ code: 'EADDRINUSE' })
+      await expect(stat(client.patch)).rejects.toMatchObject({ code: 'ENOENT' })
+      await expect(client.close()).resolves.toBeUndefined()
+    } finally {
+      await new Promise<void>((resolvePromise, reject) => occupied.close(error => error ? reject(error) : resolvePromise()))
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
   it('binds locally, requires its token, and spawns DSH without a shell', async () => {
     const child = new FakeChild()
     const spawnProcess = vi.fn(() => child as never)
@@ -177,6 +227,36 @@ describe('local client', () => {
     child.emit('close', null)
     await closing
     await first
+  })
+
+  it('escalates a timed-out shutdown to SIGKILL and shares concurrent close work', async () => {
+    const child = new FakeChild()
+    child.kill.mockImplementation((signal?: NodeJS.Signals | number) => {
+      if (signal === 'SIGKILL') {
+        child.exitCode = 137
+        queueMicrotask(() => child.emit('close', null))
+      }
+      return true
+    })
+    const spawnProcess = vi.fn(() => child as never)
+    const client = await createLocalClient({
+      token: 'test-token',
+      patch: '/tmp/reprofix-test.yml',
+      launch: { command: process.execPath, prefixArgs: ['/opt/dsh/lib/bin.js'] },
+      shutdownTimeoutMs: 5,
+      spawnProcess,
+    })
+    const url = await client.listen()
+    const input = { task: 'Fix the bug.', repro: { command: 'pnpm test', failure: { outputIncludes: ['failure'] } } }
+    const run = post(url, 'test-token', { cwd: process.cwd(), input })
+    await vi.waitFor(() => expect(spawnProcess).toHaveBeenCalledTimes(1))
+
+    const firstClose = client.close()
+    const secondClose = client.close()
+    expect(secondClose).toBe(firstClose)
+    await firstClose
+    await run
+    expect(child.kill.mock.calls.map(call => call[0])).toEqual(['SIGTERM', 'SIGKILL'])
   })
 
   it('returns a bounded launcher error and clears the active slot', async () => {
