@@ -86,6 +86,14 @@ try {
   ]) {
     readFileSync(join(installed, path))
   }
+  const presetHome = join(temporary, 'preset-home')
+  const presetEntry = join(installed, manifest.bin['dshagent-presets'])
+  execFileSync(process.execPath, [presetEntry, 'install', '--home', presetHome], {
+    cwd: consumer,
+    stdio: 'inherit',
+  })
+  readFileSync(join(presetHome, '.agent-presets', 'dshagent', 'agent.cordis.yml'))
+  readFileSync(join(presetHome, '.agent-presets', 'reprofix', 'agent.cordis.yml'))
   const clientEntry = join(installed, manifest.bin['dsh-reprofix-client'])
   const clientHelp = execFileSync(process.execPath, [clientEntry, '--help'], {
     cwd: consumer,

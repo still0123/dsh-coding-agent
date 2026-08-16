@@ -44,6 +44,18 @@ ReproFix Agent
 > [!IMPORTANT]
 > 当前版本为 `0.1.0`，仅支持从源码运行，尚未发布到 npm 或 GitHub Releases。
 
+## 内置 Agent Preset
+
+本仓库提供两种互不污染的工作模式：
+
+| Preset | 用途 | 能力 |
+| --- | --- | --- |
+| `DSHAgent` | 通用编码任务 | 文件与 Shell、搜索、Skills、Todo、提问和上下文压缩 |
+| `ReproFix` | 已有稳定复现方式的故障修复 | 精确 RED Gate、单 writer、独立验收和 Receipt |
+
+`DSHAgent` 不挂载 ReproFix Guard，可以正常修改代码；`ReproFix` 在精确复现前会锁定
+写文件与 Shell 工具。
+
 ## ReproFix Agent 如何工作
 
 ReproFix 向 DSH 注册一个模型工具：
@@ -152,22 +164,30 @@ npm install -g @deepseek-ai/dsh@0.1.0-rc.6
 dsh plugin --profile web add .
 ```
 
-然后注册项目自带的 Agent Preset：
+然后安装项目自带的两套 Agent Preset：
 
 ```bash
 DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
-PROFILE="$DSH_HOME/profiles/web"
-TARGET="$DSH_HOME/.agent-presets/reprofix"
-
-mkdir -p "$TARGET"
-cp "$PROFILE/node_modules/dsh-reprofix/preset/reprofix/agent.cordis.yml" \
-  "$PROFILE/node_modules/dsh-reprofix/preset/reprofix/preset.yml" \
-  "$TARGET/"
+node "$DSH_HOME/profiles/web/node_modules/dsh-reprofix/scripts/install-presets.mjs" install
 
 dsh web
 ```
 
-在新建会话时选择 **ReproFix**，并把待修复 Git 仓库设为工作区。
+安装器会写入：
+
+```text
+$DSH_HOME/.agent-presets/dshagent
+$DSH_HOME/.agent-presets/reprofix
+```
+
+重复执行不会改写相同文件；检测到用户本地修改时会拒绝覆盖。确实需要恢复仓库版本时，
+显式增加 `--force`：
+
+```bash
+node "$DSH_HOME/profiles/web/node_modules/dsh-reprofix/scripts/install-presets.mjs" install --force
+```
+
+新建普通开发会话时选择 **DSHAgent**；修复已有可复现故障时选择 **ReproFix**。
 
 安装包的 `cordis.patch.yml` 故意保持为空。ReproFix Guard 只应挂载到 ReproFix
 Preset，不能全局限制其他 DSH Agent。

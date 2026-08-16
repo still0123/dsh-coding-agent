@@ -4,7 +4,8 @@
   "description": "Reproduce-first repair transactions for DeepSeek Harness.",
   "type": "module",
   "bin": {
-    "dsh-reprofix-client": "./client/server.mjs"
+    "dsh-reprofix-client": "./client/server.mjs",
+    "dshagent-presets": "./scripts/install-presets.mjs"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -19,6 +20,7 @@
     "dist",
     "client",
     "preset",
+    "scripts/install-presets.mjs",
     "cordis.patch.yml",
     "README.md",
     "LICENSE",
@@ -31,7 +33,7 @@
   "scripts": {
     "clean": "rm -rf dist",
     "typecheck": "tsc --noEmit --pretty false",
-    "test": "vitest run test/domain.test.ts test/guard.test.ts test/runner.test.ts test/workflow.test.ts test/receipt.test.ts test/phase0.smoke.test.ts test/local-client.test.ts",
+    "test": "vitest run test/domain.test.ts test/guard.test.ts test/runner.test.ts test/workflow.test.ts test/receipt.test.ts test/phase0.smoke.test.ts test/local-client.test.ts test/install-presets.test.ts",
     "build": "tsc --pretty false",
     "client": "node client/server.mjs",
     "test:integration": "vitest run test/repair-failure.integration.test.ts test/golden-fixture.integration.test.ts",
