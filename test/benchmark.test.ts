@@ -9,6 +9,12 @@ import { parseArgs } from '../benchmark/run.mjs'
 
 describe('A/B benchmark scoring', () => {
   it('parses prompt-only JSON and ReproFix headings', () => {
+    expect(parseBaselineReport(
+      'BENCHMARK_STATUS=validation_failed\nBENCHMARK_SUMMARY=acceptance failed\n',
+    )).toEqual({
+      status: 'validation_failed',
+      summary: 'acceptance failed',
+    })
     expect(parseBaselineReport('note\n{"status":"fixed","summary":"done"}\n')).toEqual({
       status: 'fixed',
       summary: 'done',

@@ -172,6 +172,9 @@ function baselinePrompt(scenario) {
   return `You are the prompt-only baseline in a controlled repair benchmark.
 
 Follow these rules using only the Coding Preset:
+0. Treat the DSH runtime snapshot as authoritative: workspace-write allows
+   edit/write inside the workspace. Report an infrastructure error only after
+   an actual tool result denies the operation.
 1. Check whether the Git workspace is clean. If it is dirty, do not edit.
 2. Run the exact reproduction command and honor its timeout.
 3. Do not edit unless the observed exit code and every output literal match.
@@ -184,9 +187,9 @@ Follow these rules using only the Coding Preset:
 Declared repair input:
 ${JSON.stringify(scenario.spec, null, 2)}
 
-Your final response must be exactly one JSON object on one line:
-{"status":"fixed|not_reproduced|blocked_dirty_workspace|blocked_repro_side_effect|repair_failed|validation_failed|cancelled|infrastructure_error","summary":"short evidence-based reason"}
-Do not wrap the JSON in Markdown.`
+Your final response must be exactly two plain-text lines:
+BENCHMARK_STATUS=<fixed|not_reproduced|blocked_dirty_workspace|blocked_repro_side_effect|repair_failed|validation_failed|cancelled|infrastructure_error>
+BENCHMARK_SUMMARY=<short evidence-based reason>`
 }
 
 async function independentOracle(workspace, scenario) {

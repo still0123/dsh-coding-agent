@@ -1,6 +1,13 @@
 import { validStatuses } from './scenarios.mjs'
 
 export function parseBaselineReport(output) {
+  const marker = output.match(/(?:^|\n)BENCHMARK_STATUS=([a-z_]+)/)
+  if (validStatuses.has(marker?.[1])) {
+    return {
+      status: marker[1],
+      summary: output.match(/(?:^|\n)BENCHMARK_SUMMARY=(.*)/)?.[1] ?? '',
+    }
+  }
   const end = output.lastIndexOf('}')
   if (end === -1) return { status: 'invalid_report', summary: 'No JSON object returned.' }
   for (let start = output.lastIndexOf('{', end); start >= 0; start = output.lastIndexOf('{', start - 1)) {
