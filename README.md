@@ -30,7 +30,7 @@ ReproFix 把修复过程变成一个受控流程：
 ```
 
 > [!IMPORTANT]
-> 当前版本为 `0.1.0`，仅支持从源码运行，尚未发布到 npm 或 GitHub Releases。
+> 当前稳定版本为 `0.1.0`，通过 GitHub Releases 分发；尚未发布到 npm registry。
 
 ## 内置 Agent Preset
 
@@ -97,6 +97,19 @@ provider，必须把同一 adapter 配置到
 `$DSH_HOME/profiles/headless/cordis.patch.yml`；CLI 不会把 Web 插件隐式复制到
 headless。缺少 adapter 时，`run` 明确失败，ReproFix 在 RED 后返回带 Receipt 的
 `infrastructure_error`。
+
+## 安装 Release
+
+```bash
+npm install -g \
+  https://github.com/still0123/dsh-coding-agent/releases/download/v0.1.0/dsh-coding-agent-0.1.0.tgz
+
+dshagent --help
+dshagent presets install
+```
+
+Release 同时提供 `.sha256` 文件。npm registry 发布前，文档不使用
+`npm install -g dsh-coding-agent`。
 
 ## 快速开始：文本 CLI
 
