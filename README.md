@@ -4,7 +4,8 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![DSH](https://img.shields.io/badge/DeepSeek%20Harness-0.1.0--rc.6-4e51e8)](https://github.com/deepseek-ai/deepseek-harness)
 
-**一个只在真实失败被精确复现后，才允许 Agent 修改代码的 DeepSeek Harness 修复插件。**
+**一个基于 DeepSeek Harness 的专用代码修复 Agent：只有在真实失败被精确复现后，
+才允许修改代码。**
 
 ReproFix 解决的是常见的 AI 修复问题：模型看到一段报错后直接改代码，最后声称
 “已经修好”，但它可能没有复现原始问题，也没有运行完整验收。
@@ -27,14 +28,23 @@ ReproFix 把修复过程变成一个受控流程：
 写入可审计的 Session Receipt
 ```
 
-ReproFix 不是通用 Coding Agent，也不是新的 Agent Runtime。模型、Session、工具、
-Shell、Sandbox 和 Workflow 都由 DSH 提供；本项目只负责“先复现、后修复、再验证”
-这一条严格修复流程。
+ReproFix 是专用 Coding Agent，不是通用 Coding Agent，也不重复实现底层 Agent
+Runtime。它由三部分组成：
+
+```text
+ReproFix Agent
+├── Agent Preset：定义角色、工具和工作模式
+├── ReproFix Plugin：实现 RED Gate、修复流程和 Receipt
+└── DSH Runtime：提供 Agent Loop、Session、Shell、Sandbox 和 Workflow
+```
+
+用户实际运行的是 ReproFix Agent；Plugin 是该 Agent 在 DSH 中实现专用修复能力的
+内部组件。
 
 > [!IMPORTANT]
 > 当前版本为 `0.1.0`，仅支持从源码运行，尚未发布到 npm 或 GitHub Releases。
 
-## 它实际做什么
+## ReproFix Agent 如何工作
 
 ReproFix 向 DSH 注册一个模型工具：
 
