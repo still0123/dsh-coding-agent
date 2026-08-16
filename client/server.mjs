@@ -171,8 +171,10 @@ export async function createLocalClient(options = {}) {
   }
   let active = false
   let activeChild
+  let activeResponse
   let activeDone = Promise.resolve()
   let settleActive
+  let pendingRequest
   let closing = false
   let closePromise
   const server = createServer(async (request, response) => {
@@ -195,14 +197,20 @@ export async function createLocalClient(options = {}) {
     if (request.headers['content-type']?.split(';')[0] !== 'application/json') return json(response, 415, { error: 'application/json required' })
     if (active) return json(response, 409, { error: 'a ReproFix run is already active' })
     active = true
+    activeResponse = response
+    pendingRequest = request
     activeDone = new Promise(resolvePromise => { settleActive = resolvePromise })
     try {
       const body = await readJson(request)
+      if (pendingRequest === request) pendingRequest = undefined
       if (typeof body.cwd !== 'string' || !isAbsolute(body.cwd)) throw new Error('cwd must be an absolute path')
       if (!validInput(body.input)) throw new Error('input must contain task and repro objects')
       const cwd = resolve(body.cwd)
       const info = await stat(cwd)
       if (!info.isDirectory()) throw new Error('cwd must be a directory')
+      if (closing || request.aborted || response.destroyed) {
+        throw new Error('local client is shutting down')
+      }
       const child = spawnProcess(launch.command, [
         ...launch.prefixArgs,
         '--profile', 'headless', '--patch', patch, buildPrompt(body.input),
@@ -225,6 +233,8 @@ export async function createLocalClient(options = {}) {
         settled = true
         active = false
         activeChild = undefined
+        if (activeResponse === response) activeResponse = undefined
+        if (pendingRequest === request) pendingRequest = undefined
         settleActive?.()
         settleActive = undefined
         if (!response.destroyed) response.end(message)
@@ -234,14 +244,16 @@ export async function createLocalClient(options = {}) {
       child.on('error', error => finish(`\n[launcher error] ${error.message}\n`))
       child.on('close', code => finish(`\n[ReproFix exited ${code ?? 'without a code'}]\n`))
       response.on('close', () => {
-        if (!settled && child.exitCode === null) child.kill()
+        if (!closing && !settled && child.exitCode === null) child.kill()
       })
     } catch (error) {
       active = false
       activeChild = undefined
+      if (activeResponse === response) activeResponse = undefined
+      if (pendingRequest === request) pendingRequest = undefined
       settleActive?.()
       settleActive = undefined
-      json(response, 400, { error: error instanceof Error ? error.message : String(error) })
+      if (!response.destroyed) json(response, 400, { error: error instanceof Error ? error.message : String(error) })
     }
   })
   let listening = false
@@ -280,23 +292,33 @@ export async function createLocalClient(options = {}) {
     closing = true
     closePromise = (async () => {
       let failure
-      const serverClosed = closeServer(server).catch(error => { failure ??= error })
-      const child = activeChild
-      if (child?.exitCode === null) child.kill('SIGTERM')
+      let serverFailure
+      const serverClosed = closeServer(server).catch(error => { serverFailure = error })
+      pendingRequest?.destroy()
+      if (activeChild?.exitCode === null) activeChild.kill('SIGTERM')
       let settled = await waitForSettlement(activeDone, shutdownTimeoutMs)
-      if (!settled && child?.exitCode === null) {
-        child.kill('SIGKILL')
+      let forcedChild = false
+      if (!settled && activeChild?.exitCode === null) {
+        forcedChild = true
+        activeChild.kill('SIGKILL')
         settled = await waitForSettlement(activeDone, shutdownTimeoutMs)
       }
       if (!settled) {
+        activeResponse?.destroy()
         active = false
         activeChild = undefined
+        activeResponse = undefined
+        pendingRequest = undefined
         settleActive?.()
         settleActive = undefined
-        failure ??= new Error('DSH child did not exit after SIGKILL')
+        if (forcedChild) failure ??= new Error('DSH child did not exit after SIGKILL')
       }
-      server.closeAllConnections?.()
-      await serverClosed
+      server.closeIdleConnections?.()
+      if (!(await waitForSettlement(serverClosed, shutdownTimeoutMs))) {
+        server.closeAllConnections?.()
+        await serverClosed
+      }
+      failure ??= serverFailure
       try {
         await removeOwnedPatch()
       } catch (error) {

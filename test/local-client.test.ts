@@ -6,7 +6,7 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { EventEmitter } from 'node:events'
 import { mkdir, mkdtemp, readdir, rm, stat, writeFile } from 'node:fs/promises'
-import { createServer as createHttpServer } from 'node:http'
+import { request as createHttpRequest, createServer as createHttpServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
@@ -265,6 +265,41 @@ describe('local client', () => {
     child.emit('close', null)
     await closing
     await first
+  })
+
+  it('does not spawn DSH when shutdown interrupts a partial request body', async () => {
+    const spawnProcess = vi.fn()
+    const client = await createLocalClient({
+      token: 'test-token',
+      patch: '/tmp/reprofix-test.yml',
+      launch: { command: process.execPath, prefixArgs: ['/opt/dsh/lib/bin.js'] },
+      shutdownTimeoutMs: 50,
+      spawnProcess,
+    })
+    const url = await client.listen()
+    const requestSeen = new Promise(resolvePromise => client.server.once('request', resolvePromise))
+    const request = createHttpRequest(new URL('/api/run', url), {
+      method: 'POST',
+      headers: {
+        'content-length': '4096',
+        'content-type': 'application/json',
+        'x-reprofix-token': 'test-token',
+      },
+    })
+    const requestDone = new Promise<void>(resolvePromise => {
+      request.once('error', () => resolvePromise())
+      request.once('response', response => {
+        response.resume()
+        response.once('end', () => resolvePromise())
+      })
+    })
+    request.write('{"cwd":"')
+    await requestSeen
+
+    await client.close()
+    request.destroy()
+    await requestDone
+    expect(spawnProcess).not.toHaveBeenCalled()
   })
 
   it('escalates a timed-out shutdown to SIGKILL and shares concurrent close work', async () => {
