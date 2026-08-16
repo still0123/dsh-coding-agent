@@ -7,7 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![DSH](https://img.shields.io/badge/DeepSeek%20Harness-0.1.0--rc.6-4e51e8)](https://github.com/deepseek-ai/deepseek-harness)
 
-![DSH Coding Agent banner](docs/images/readme-banner.svg)
+![DSH Coding Agent banner](docs/images/readme-banner.zh.svg)
 
 ## 当编码 Agent 说「已修复」时,谁来验证?
 
@@ -77,7 +77,7 @@ repair_failure
 
 ## 架构与所有权
 
-![DSH Coding Agent architecture](docs/images/architecture.svg)
+![DSH Coding Agent architecture](docs/images/architecture.zh.svg)
 
 | DSH 提供 | 本项目实现 |
 | --- | --- |
@@ -192,7 +192,7 @@ ID 或 resume(见[路线图](#路线图))。
 
 每个 Demo 都会把 `fixtures/buggy-project` 复制到新的临时 Git 仓库,并断言最终状态:
 
-![Verified ReproFix demo outcomes](docs/images/demo-results.svg)
+![Verified ReproFix demo outcomes](docs/images/demo-results.zh.svg)
 
 ```bash
 pnpm demo:not-reproduced

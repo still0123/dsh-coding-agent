@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="740" viewBox="0 0 1200 740" role="img" aria-labelledby="title desc">
+  <title id="title">DSH Coding Agent 架构</title>
+  <desc id="desc">CLI 在 DSH 运行时上选择 Coding 或 ReproFix Preset。ReproFix 观察失败、约束唯一 writer、验证最终补丁并写入回执。</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#7b8798"/>
+    </marker>
+  </defs>
+  <rect width="1200" height="740" fill="#ffffff"/>
+  <text x="60" y="56" fill="#111827" font-family="'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Segoe UI',Arial,sans-serif" font-size="30" font-weight="700">运行时所有权与请求流</text>
+  <text x="60" y="88" fill="#5f6b7a" font-family="'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Segoe UI',Arial,sans-serif" font-size="16">组合层与 DSH 运行时保持分离;ReproFix 在其上增加一个可审计事务</text>
+
+  <rect x="60" y="122" width="220" height="130" rx="8" fill="#f7f9fc" stroke="#aeb8c6" stroke-width="2"/>
+  <text x="170" y="164" text-anchor="middle" fill="#111827" font-family="'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Segoe UI',Arial,sans-serif" font-size="21" font-weight="700">用户入口</text>
+  <text x="170" y="197" text-anchor="middle" fill="#4f5d70" font-family="SFMono-Regular,Consolas,monospace" font-size="15">dshagent run</text>
+  <text x="170" y="221" text-anchor="middle" fill="#4f5d70" font-family="SFMono-Regular,Consolas,monospace" font-size="15">dshagent repair</text>
+
+  <line x1="280" y1="187" x2="364" y2="187" stroke="#7b8798" stroke-width="3" marker-end="url(#arrow)"/>
+
+  <rect x="372" y="122" width="292" height="130" rx="8" fill="#eef5ff" stroke="#1769e0" stroke-width="2"/>
+  <text x="518" y="164" text-anchor="middle" fill="#123f7d" font-family="'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Segoe UI',Arial,sans-serif" font-size="21" font-weight="700">CLI 信任边界</text>
+  <text x="518" y="197" text-anchor="middle" fill="#3c5f8c" font-family="'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Segoe UI',Arial,sans-serif" font-size="15">校验并确认 repair.json</text>
+  <text x="518" y="220" text-anchor="middle" fill="#3c5f8c" font-family="'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Segoe UI',Arial,sans-serif" font-size="15">canonical root + fingerprint</text>
+  <text x="518" y="243" text-anchor="middle" fill="#3c5f8c" font-family="'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Segoe UI',Arial,sans-serif" font-size="15">仅属主可用的启动上下文</text>
+
+  <line x1="664" y1="187" x2="740" y2="187" stroke="#7b8798" stroke-width="3" marker-end="url(#arrow)"/>
+
+  <rect x="748" y="122" width="392" height="130" rx="8" fill="#f1f8f4" stroke="#20a36a" stroke-width="2"/>
+  <text x="944" y="164" text-anchor="middle" fill="#14633f" font-family="'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Segoe UI',Arial,sans-serif" font-size="21" font-weight="700">DeepSeek Harness 运行时</text>
+  <text x="944" y="197" text-anchor="middle" fill="#356c54" font-family="'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Segoe UI',Arial,sans-serif" font-size="15">Agent Loop | 模型适配 | 工具 | 沙箱</text>
+  <text x="944" y="220" text-anchor="middle" fill="#356c54" font-family="'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Segoe UI',Arial,sans-serif" font-size="15">Session 日志 | 持久化 | Workflow 引擎</text>
+  <text x="944" y="243" text-anchor="middle" fill="#356c54" font-family="'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Segoe UI',Arial,sans-serif" font-size="15">由 DSH 提供,本项目不重写</text>
+
+  <path d="M 850 252 L 850 292 L 300 292 L 300 326" fill="none" stroke="#7b8798" stroke-width="3" marker-end="url(#arrow)"/>
+  <path d="M 1040 252 L 1040 292 L 890 292 L 890 326" fill="none" stroke="#7b8798" stroke-width="3" marker-end="url(#arrow)"/>
+  <text x="595" y="282" text-anchor="middle" fill="#7b8798" font-family="'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Segoe UI',Arial,sans-serif" font-size="13">DSH 按会话选择一套 Preset</text>
+
+  <rect x="120" y="334" width="360" height="128" rx="8" fill="#fff8e8" stroke="#d59224" stroke-width="2"/>
+  <text x="300" y="376" text-anchor="middle" fill="#825313" font-family="'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Segoe UI',Arial,sans-serif" font-size="21" font-weight="700">Coding Preset</text>
+  <text x="300" y="407" text-anchor="middle" fill="#795f37" font-family="'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Segoe UI',Arial,sans-serif" font-size="15">文件 | Shell | 搜索 | Skills | Todo</text>
+  <text x="300" y="430" text-anchor="middle" fill="#795f37" font-family="'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Segoe UI',Arial,sans-serif" font-size="15">提问与上下文压缩</text>
+  <text x="300" y="453" text-anchor="middle" fill="#795f37" font-family="'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Segoe UI',Arial,sans-serif" font-size="15">仅做 DSH 能力组合</text>
+
+  <rect x="640" y="334" width="500" height="128" rx="8" fill="#fff1f0" stroke="#d64545" stroke-width="2"/>
+  <text x="890" y="376" text-anchor="middle" fill="#963131" font-family="'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Segoe UI',Arial,sans-serif" font-size="21" font-weight="700">ReproFix Preset</text>
+  <text x="890" y="407" text-anchor="middle" fill="#7b3a3a" font-family="'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Segoe UI',Arial,sans-serif" font-size="15">RED gate | 单一 writer | 无 Shell</text>
+  <text x="890" y="430" text-anchor="middle" fill="#7b3a3a" font-family="'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Segoe UI',Arial,sans-serif" font-size="15">wrapper 重跑复现与全部验收命令</text>
+  <text x="890" y="453" text-anchor="middle" fill="#7b3a3a" font-family="'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Segoe UI',Arial,sans-serif" font-size="15">自研修复执行合同</text>
+
+  <line x1="890" y1="462" x2="890" y2="498" stroke="#7b8798" stroke-width="3" marker-end="url(#arrow)"/>
+
+  <rect x="60" y="504" width="1080" height="170" rx="10" fill="#f7f9fc" stroke="#c5ccd7" stroke-width="2"/>
+  <text x="84" y="534" fill="#3c4657" font-family="'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Segoe UI',Arial,sans-serif" font-size="16" font-weight="700">ReproFix 执行事务</text>
+
+  <text x="289" y="584" text-anchor="middle" fill="#7b8798" font-family="'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Segoe UI',Arial,sans-serif" font-size="12.5">RED 前拒绝一切写入</text>
+  <text x="509" y="584" text-anchor="middle" fill="#7b8798" font-family="'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Segoe UI',Arial,sans-serif" font-size="12.5">writer 无 Shell</text>
+  <text x="730" y="584" text-anchor="middle" fill="#7b8798" font-family="'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Segoe UI',Arial,sans-serif" font-size="12.5">指纹必须不变</text>
+  <text x="945" y="584" text-anchor="middle" fill="#7b8798" font-family="'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Segoe UI',Arial,sans-serif" font-size="12.5">仅 fixed 返回 ok</text>
+
+  <line x1="212" y1="600" x2="366" y2="600" stroke="#7b8798" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="432" y1="600" x2="586" y2="600" stroke="#7b8798" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="652" y1="600" x2="806" y2="600" stroke="#7b8798" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="872" y1="600" x2="1016" y2="600" stroke="#7b8798" stroke-width="3" marker-end="url(#arrow)"/>
+
+  <circle cx="180" cy="600" r="32" fill="#fff1f0" stroke="#d64545" stroke-width="3"/>
+  <circle cx="400" cy="600" r="32" fill="#eef5ff" stroke="#1769e0" stroke-width="3"/>
+  <circle cx="620" cy="600" r="32" fill="#fff8e8" stroke="#d59224" stroke-width="3"/>
+  <circle cx="840" cy="600" r="32" fill="#eaf8f1" stroke="#20a36a" stroke-width="3"/>
+  <circle cx="1050" cy="600" r="32" fill="#f1efff" stroke="#7357c7" stroke-width="3"/>
+  <text x="180" y="606" text-anchor="middle" fill="#a52f2f" font-family="'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Segoe UI',Arial,sans-serif" font-size="15" font-weight="700">RED</text>
+  <text x="400" y="606" text-anchor="middle" fill="#1454ad" font-family="'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Segoe UI',Arial,sans-serif" font-size="15" font-weight="700">EDIT</text>
+  <text x="620" y="606" text-anchor="middle" fill="#825313" font-family="'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Segoe UI',Arial,sans-serif" font-size="15" font-weight="700">PATCH</text>
+  <text x="840" y="606" text-anchor="middle" fill="#14764c" font-family="'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Segoe UI',Arial,sans-serif" font-size="15" font-weight="700">GREEN</text>
+  <text x="1050" y="606" text-anchor="middle" fill="#59429d" font-family="'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Segoe UI',Arial,sans-serif" font-size="13.5" font-weight="700">RECEIPT</text>
+  <text x="180" y="656" text-anchor="middle" fill="#5f6b7a" font-family="'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Segoe UI',Arial,sans-serif" font-size="13">复现失败特征</text>
+  <text x="400" y="656" text-anchor="middle" fill="#5f6b7a" font-family="'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Segoe UI',Arial,sans-serif" font-size="13">唯一 writer 修改</text>
+  <text x="620" y="656" text-anchor="middle" fill="#5f6b7a" font-family="'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Segoe UI',Arial,sans-serif" font-size="13">补丁指纹</text>
+  <text x="840" y="656" text-anchor="middle" fill="#5f6b7a" font-family="'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Segoe UI',Arial,sans-serif" font-size="13">插件重跑验证</text>
+  <text x="1050" y="656" text-anchor="middle" fill="#5f6b7a" font-family="'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Segoe UI',Arial,sans-serif" font-size="13">审计回执</text>
+
+  <text x="600" y="706" text-anchor="middle" fill="#5f6b7a" font-family="'PingFang SC','Hiragino Sans GB','Microsoft YaHei','Segoe UI',Arial,sans-serif" font-size="14">GREEN 由 wrapper 亲自重跑,绝不采信 writer 声明;跨进程工作区锁保护 canonical Git root</text>
+</svg>
