@@ -37,7 +37,8 @@
   "scripts": {
     "clean": "rm -rf dist",
     "typecheck": "tsc --noEmit --pretty false",
-    "test": "vitest run test/domain.test.ts test/guard.test.ts test/runner.test.ts test/workflow.test.ts test/receipt.test.ts test/phase0.smoke.test.ts test/local-client.test.ts test/install-presets.test.ts test/workspace-lock.test.ts test/cli.test.ts",
+    "test": "vitest run test/domain.test.ts test/guard.test.ts test/runner.test.ts test/workflow.test.ts test/receipt.test.ts test/phase0.smoke.test.ts test/local-client.test.ts test/install-presets.test.ts test/workspace-lock.test.ts test/cli.test.ts test/benchmark.test.ts",
+    "benchmark": "node benchmark/run.mjs",
     "build": "tsc --pretty false",
     "client": "node client/server.mjs",
     "dshagent": "node client/cli.mjs",
