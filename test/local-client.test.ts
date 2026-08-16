@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
-import { buildPrompt, createLocalClient, createShutdownHandler, dshLaunch, openBrowser, validHost, waitForSettlement } from '../client/server.mjs'
+import { buildPrompt, createLocalClient, createShutdownHandler, dshLaunch, forwardChildOutput, openBrowser, validHost, waitForSettlement } from '../client/server.mjs'
 import { apply as applyClientScope, mountReproFix } from '../src/client-scope.js'
 
 class FakeChild extends EventEmitter {
@@ -102,6 +102,72 @@ describe('local client', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('pauses both child streams on response backpressure and resumes on drain', () => {
+    const stdout = new EventEmitter() as EventEmitter & { pause: ReturnType<typeof vi.fn>; resume: ReturnType<typeof vi.fn> }
+    const stderr = new EventEmitter() as EventEmitter & { pause: ReturnType<typeof vi.fn>; resume: ReturnType<typeof vi.fn> }
+    stdout.pause = vi.fn()
+    stdout.resume = vi.fn()
+    stderr.pause = vi.fn()
+    stderr.resume = vi.fn()
+    const response = new EventEmitter() as EventEmitter & {
+      destroyed: boolean
+      writableEnded: boolean
+      write: ReturnType<typeof vi.fn>
+      destroy: ReturnType<typeof vi.fn>
+    }
+    response.destroyed = false
+    response.writableEnded = false
+    response.write = vi.fn().mockReturnValueOnce(false).mockReturnValue(true)
+    response.destroy = vi.fn()
+
+    const cleanup = forwardChildOutput([stdout, stderr], response)
+    stdout.emit('data', Buffer.from('first'))
+    expect(response.write).toHaveBeenCalledWith(Buffer.from('first'))
+    expect(stdout.pause).toHaveBeenCalledTimes(1)
+    expect(stderr.pause).toHaveBeenCalledTimes(1)
+
+    response.emit('drain')
+    expect(stdout.resume).toHaveBeenCalledTimes(1)
+    expect(stderr.resume).toHaveBeenCalledTimes(1)
+    stderr.emit('data', Buffer.from('second'))
+    expect(response.write).toHaveBeenLastCalledWith(Buffer.from('second'))
+
+    cleanup()
+    expect(stdout.listenerCount('data')).toBe(0)
+    expect(stderr.listenerCount('data')).toBe(0)
+    expect(response.listenerCount('drain')).toBe(0)
+    expect(response.listenerCount('close')).toBe(0)
+  })
+
+  it('removes output listeners and keeps child pipes flowing after disconnect', () => {
+    const stdout = new PassThrough()
+    const stderr = new PassThrough()
+    const stdoutResume = vi.spyOn(stdout, 'resume')
+    const stderrResume = vi.spyOn(stderr, 'resume')
+    const response = new EventEmitter() as EventEmitter & {
+      destroyed: boolean
+      writableEnded: boolean
+      write: ReturnType<typeof vi.fn>
+      destroy: ReturnType<typeof vi.fn>
+    }
+    response.destroyed = false
+    response.writableEnded = false
+    response.write = vi.fn(() => true)
+    response.destroy = vi.fn()
+
+    forwardChildOutput([stdout, stderr], response)
+    expect(stdout.listenerCount('data')).toBe(1)
+    expect(stderr.listenerCount('data')).toBe(1)
+    response.emit('close')
+
+    expect(stdout.listenerCount('data')).toBe(0)
+    expect(stderr.listenerCount('data')).toBe(0)
+    expect(stdoutResume).toHaveBeenCalled()
+    expect(stderrResume).toHaveBeenCalled()
+    stdout.destroy()
+    stderr.destroy()
   })
 
   it('shares concurrent signal shutdown work', async () => {

@@ -194,6 +194,42 @@ function closeServer(server) {
   })
 }
 
+export function forwardChildOutput(streams, response) {
+  const readable = streams.filter(Boolean)
+  let closed = false
+  let paused = false
+  const onDrain = () => {
+    if (closed) return
+    paused = false
+    for (const stream of readable) stream.resume()
+  }
+  const onData = (chunk) => {
+    if (closed || response.destroyed || response.writableEnded) return
+    try {
+      if (!response.write(chunk) && !paused) {
+        paused = true
+        for (const stream of readable) stream.pause()
+        response.once('drain', onDrain)
+      }
+    } catch {
+      response.destroy()
+    }
+  }
+  const cleanup = () => {
+    if (closed) return
+    closed = true
+    response.off('close', cleanup)
+    response.off('drain', onDrain)
+    for (const stream of readable) {
+      stream.off('data', onData)
+      stream.resume()
+    }
+  }
+  for (const stream of readable) stream.on('data', onData)
+  response.once('close', cleanup)
+  return cleanup
+}
+
 export async function createLocalClient(options = {}) {
   const token = options.token ?? randomBytes(24).toString('base64url')
   const spawnProcess = options.spawnProcess ?? spawn
@@ -301,9 +337,11 @@ export async function createLocalClient(options = {}) {
         'x-content-type-options': 'nosniff',
       })
       let settled = false
+      const cleanupOutput = forwardChildOutput([child.stdout, child.stderr], response)
       const finish = (message) => {
         if (settled) return
         settled = true
+        cleanupOutput()
         active = false
         activeChild = undefined
         if (activeResponse === response) activeResponse = undefined
@@ -325,8 +363,6 @@ export async function createLocalClient(options = {}) {
         return terminationPromise
       }
       stopActiveChild = terminateActiveChild
-      child.stdout?.on('data', chunk => response.write(chunk))
-      child.stderr?.on('data', chunk => response.write(chunk))
       child.on('error', error => finish(`\n[launcher error] ${error.message}\n`))
       child.on('close', code => finish(`\n[ReproFix exited ${code ?? 'without a code'}]\n`))
       response.on('close', () => {
