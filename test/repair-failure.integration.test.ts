@@ -383,4 +383,32 @@ describe('repair_failure transaction', () => {
     })
     expect(result.status).toBe('cancelled')
   })
+
+  it('releases the active claim when the first state append fails', async () => {
+    const deps = dependencies({})
+    const caller = agent()
+    vi.spyOn(caller.session, 'append').mockImplementationOnce(() => { throw new Error('state persistence failed') })
+
+    await expect(executeRepairFailure({
+      args: args(), agent: caller, toolCallId: 'call-1', signal: new AbortController().signal, dependencies: deps,
+    })).rejects.toThrow('state persistence failed')
+    expect(deps.activeRuns.current(caller)).toBeUndefined()
+    expect(deps.activeRuns.claim(String(caller.id), 'retry', caller)).toBe(true)
+  })
+
+  it('releases the active claim and remains locked when receipt persistence fails', async () => {
+    const deps = dependencies({ clean: false })
+    const caller = agent()
+    const originalAppend = caller.session.append.bind(caller.session)
+    vi.spyOn(caller.session, 'append').mockImplementation(((type: string, data: unknown) => {
+      if (type === 'reprofix/receipt') throw new Error('receipt persistence failed')
+      return originalAppend(type as never, data as never)
+    }) as never)
+
+    await expect(executeRepairFailure({
+      args: args(), agent: caller, toolCallId: 'call-1', signal: new AbortController().signal, dependencies: deps,
+    })).rejects.toThrow('receipt persistence failed')
+    expect(deps.activeRuns.current(caller)).toBeUndefined()
+    expect(deps.activeRuns.claim(String(caller.id), 'retry', caller)).toBe(true)
+  })
 })
