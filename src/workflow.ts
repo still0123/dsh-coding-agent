@@ -89,6 +89,8 @@ export async function runWriterWorkflow(input: {
   previousValidation?: CommandEvidence[]
   patch?: PatchSummary
 }): Promise<WorkflowAttempt> {
+  if (input.signal.aborted) return { stopReason: 'cancelled', agentsStarted: 0 }
+
   const run = input.ctx.workflowEngine.start({
     script: REPAIR_WORKFLOW_SCRIPT,
     meta: WORKFLOW_META,
@@ -104,8 +106,16 @@ export async function runWriterWorkflow(input: {
     maxTotalAgents: 1,
   })
 
-  const onAbort = (): void => { run.cancel('repair_failure aborted') }
+  let abortForwarded = false
+  const onAbort = (): void => {
+    if (abortForwarded) return
+    abortForwarded = true
+    try {
+      run.cancel('repair_failure aborted')
+    } catch {}
+  }
   input.signal.addEventListener('abort', onAbort, { once: true })
+  if (input.signal.aborted) onAbort()
   try {
     const result = await run.result
     const base: WorkflowAttempt = {

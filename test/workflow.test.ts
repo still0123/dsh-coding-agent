@@ -61,6 +61,37 @@ describe('writer workflow lifecycle', () => {
     }
   })
 
+  it('does not start a workflow for an already-aborted caller', async () => {
+    const controller = new AbortController()
+    controller.abort('stop')
+    const start = vi.fn()
+
+    await expect(runWriterWorkflow(input({ workflowEngine: { start } }, controller.signal))).resolves.toEqual({
+      stopReason: 'cancelled',
+      agentsStarted: 0,
+    })
+    expect(start).not.toHaveBeenCalled()
+  })
+
+  it('forwards an abort that races with workflow start exactly once', async () => {
+    const controller = new AbortController()
+    const cancel = vi.fn()
+    const dispose = vi.fn(async () => undefined)
+    const start = vi.fn(() => {
+      controller.abort('stop')
+      return {
+        result: Promise.resolve({ stopReason: 'cancelled', agentsStarted: 0, value: null }),
+        cancel,
+        dispose,
+      }
+    })
+
+    const result = await runWriterWorkflow(input({ workflowEngine: { start } }, controller.signal))
+    expect(result.stopReason).toBe('cancelled')
+    expect(cancel).toHaveBeenCalledTimes(1)
+    expect(dispose).toHaveBeenCalledTimes(1)
+  })
+
   it('bridges caller cancellation and disposes', async () => {
     const controller = new AbortController()
     const cancel = vi.fn()
