@@ -65,6 +65,15 @@ function toolModule(names: readonly string[]) {
   }
 }
 
+function observedModule(id: string, applied: Map<string, unknown>) {
+  return {
+    name: `preset-smoke-${id}`,
+    apply(_ctx: Context, config: unknown) {
+      applied.set(id, config)
+    },
+  }
+}
+
 const noopModule = { name: 'preset-smoke-noop', apply() {} }
 
 function agent(id: string) {
@@ -140,6 +149,76 @@ describe('real DSH ReproFix preset mount', () => {
       signal: new AbortController().signal,
     })
     expect(read.isError).toBe(false)
+    await mounted.scope.dispose()
+  })
+})
+
+describe('real DSHAgent coding preset mount', () => {
+  it('mounts the coding tools and the isolated compaction group', async () => {
+    const ctx = new Context()
+    ctx.baseUrl = pathToFileURL(join(root, 'node_modules', '@deepseek-ai', 'dsh', 'package.json')).href
+    await ctx.plugin(Loader)
+    ctx.loader.builtins.group = Group
+    await ctx.plugin(SystemPrompt, {})
+    await ctx.plugin(ToolRuntime, { mode: 'native' })
+    await ctx.plugin(SubagentRuntime)
+    await ctx.plugin(FakeShell)
+
+    const applied = new Map<string, unknown>()
+    const modules: Record<string, unknown> = {
+      '@deepseek-ai/dsh-persona': noopModule,
+      '@deepseek-ai/dsh-agent-instructions': noopModule,
+      '@deepseek-ai/dsh-tool-bash': toolModule(['bash']),
+      '@deepseek-ai/dsh-tool-pwsh': toolModule(['pwsh']),
+      '@deepseek-ai/dsh-tool-fs': toolModule(['read', 'write', 'edit']),
+      '@deepseek-ai/dsh-tool-fs-search': toolModule(['glob', 'grep']),
+      '@deepseek-ai/dsh-skill-filesystem': noopModule,
+      '@deepseek-ai/dsh-tool-skill': toolModule(['skill']),
+      '@deepseek-ai/dsh-compaction-basic': observedModule('compaction-basic', applied),
+      '@deepseek-ai/dsh-command-compact': observedModule('command-compact', applied),
+      '@deepseek-ai/dsh-compaction-tool-result-pruner': observedModule('tool-result-pruner', applied),
+      '@deepseek-ai/dsh-tool-ask-user': toolModule(['ask_user_question']),
+      '@deepseek-ai/dsh-tool-todo': toolModule(['todo_write']),
+    }
+    ctx.loader.internal = {
+      import: async (specifier: string) => {
+        if (specifier in modules) return modules[specifier]
+        throw new Error(`unexpected preset module: ${specifier}`)
+      },
+    } as never
+
+    const mounted = agent('coding-preset-agent')
+    mounted.scope = createScope(ctx, mounted.key)
+    ;(mounted.key as { ctx?: Context }).ctx = mounted.scope.ctx
+    await mountPreset(mounted.scope.ctx, {
+      id: 'coding',
+      trust: 'system',
+      path: join(root, 'preset', 'coding', 'agent.cordis.yml'),
+    })
+
+    const names = ctx.tools.schemas(mounted.key).map((schema) => schema.name).sort()
+    expect(names).toEqual([
+      'ask_user_question',
+      process.platform === 'win32' ? 'pwsh' : 'bash',
+      'edit',
+      'glob',
+      'grep',
+      'read',
+      'skill',
+      'todo_write',
+      'write',
+    ].sort())
+    expect([...applied.keys()].sort()).toEqual([
+      'command-compact',
+      'compaction-basic',
+      'tool-result-pruner',
+    ])
+    expect(applied.get('tool-result-pruner')).toEqual({
+      thresholdChars: 8192,
+      headChars: 4096,
+      tailChars: 1024,
+    })
+
     await mounted.scope.dispose()
   })
 })

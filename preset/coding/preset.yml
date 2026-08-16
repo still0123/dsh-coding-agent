@@ -1,0 +1,3 @@
+name: DSHAgent
+description: 轻量通用 Coding Agent，支持文件、Shell、Skills 与上下文压缩。
+order: 10

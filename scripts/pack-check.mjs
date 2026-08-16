@@ -78,6 +78,14 @@ try {
   })
   process.stdout.write(imported)
   const installed = join(consumer, 'node_modules', manifest.name)
+  for (const path of [
+    'preset/coding/agent.cordis.yml',
+    'preset/coding/preset.yml',
+    'preset/reprofix/agent.cordis.yml',
+    'preset/reprofix/preset.yml',
+  ]) {
+    readFileSync(join(installed, path))
+  }
   const clientEntry = join(installed, manifest.bin['dsh-reprofix-client'])
   const clientHelp = execFileSync(process.execPath, [clientEntry, '--help'], {
     cwd: consumer,
