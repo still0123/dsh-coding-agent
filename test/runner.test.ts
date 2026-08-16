@@ -43,6 +43,20 @@ describe('command runner', () => {
     })
   })
 
+  it('propagates shell-level output truncation so matchers fail closed', async () => {
+    const runner = createCommandRunner({
+      shell: {
+        resolve: (value: unknown) => value,
+        run: async () => shellResult({ stdout: { text: 'tail only', truncated: true } }),
+      },
+    } as never)
+    const result = await runner.run({
+      command: 'large output', cwd: '/repo', timeoutMs: 1_000,
+      signal: new AbortController().signal, maxOutputBytes: 1_024,
+    })
+    expect(result).toMatchObject({ truncated: true, stdout: 'tail only' })
+  })
+
   it('normalizes spawn infrastructure errors without inventing exit code 1', async () => {
     const runner = createCommandRunner({
       shell: { resolve: (value: unknown) => value, run: async () => { throw new Error('spawn ENOENT') } },
@@ -56,6 +70,16 @@ describe('command runner', () => {
 })
 
 describe('git adapter', () => {
+  it('fails closed when an internal Git command output is truncated', async () => {
+    const adapter = createGitAdapter({
+      shell: {
+        resolve: (value: unknown) => value,
+        run: async () => shellResult({ stdout: { text: '/repo', truncated: true } }),
+      },
+    } as never)
+    await expect(adapter.baseline('/repo')).rejects.toThrow(/git command output exceeded/)
+  })
+
   it('detects dirty untracked files and computes deterministic patch stats', async () => {
     const root = await mkdtemp(join(tmpdir(), 'reprofix-git-'))
     await exec('git', ['init', '-q'], { cwd: root })
@@ -132,6 +156,49 @@ describe('git adapter', () => {
     expect(summary.added).toBe(2)
     expect(summary.deleted).toBe(0)
     expect(summary.score).toBe(22)
+  })
+
+  it('streams a large untracked text file into its fingerprint and line score', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'reprofix-git-large-'))
+    await exec('git', ['init', '-q'], { cwd: root })
+    await exec('git', ['config', 'user.email', 'test@example.com'], { cwd: root })
+    await exec('git', ['config', 'user.name', 'Test'], { cwd: root })
+    await writeFile(join(root, 'tracked.txt'), 'base\n')
+    await exec('git', ['add', '.'], { cwd: root })
+    await exec('git', ['commit', '-qm', 'base'], { cwd: root })
+    const lines = 100_000
+    await writeFile(join(root, 'large.txt'), 'line\n'.repeat(lines))
+
+    const shell = {
+      resolve: (value: unknown) => value,
+      async run(spec: { command: string; workdir: string }) {
+        try {
+          const { stdout, stderr } = await exec('/bin/sh', ['-c', spec.command], { cwd: spec.workdir, encoding: 'utf8' })
+          return shellResult({ stdout: { text: stdout, truncated: false }, stderr: { text: stderr, truncated: false } })
+        } catch (error: unknown) {
+          const failure = error as { code?: number; stdout?: string; stderr?: string }
+          return shellResult({
+            exitCode: failure.code ?? 1,
+            stdout: { text: failure.stdout ?? '', truncated: false },
+            stderr: { text: failure.stderr ?? String(error), truncated: false },
+          })
+        }
+      },
+    }
+    const adapter = createGitAdapter({ shell } as never)
+    const first = await adapter.patch(root, 1)
+    await writeFile(join(root, 'large.txt'), `${'line\n'.repeat(lines - 1)}changed\n`)
+    const second = await adapter.patch(root, 1)
+
+    expect(first).toMatchObject({
+      changedFiles: ['large.txt'],
+      added: lines,
+      deleted: 0,
+      binaryFiles: [],
+      score: lines + 10,
+    })
+    expect(second.added).toBe(lines)
+    expect(second.fingerprint).not.toBe(first.fingerprint)
   })
 
   it.skipIf(process.platform === 'win32')('fingerprints an untracked symlink without reading its external target', async () => {

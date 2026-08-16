@@ -1,5 +1,6 @@
-import { createHash } from 'node:crypto'
-import { lstat, readFile, readlink } from 'node:fs/promises'
+import { createHash, type Hash } from 'node:crypto'
+import { createReadStream } from 'node:fs'
+import { lstat, readlink } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-shell'
@@ -43,6 +44,7 @@ export function createCommandRunner(ctx: Context): CommandRunner {
           sandboxDenied: result.sandbox?.denied ?? false,
           durationMs: finished - started,
           ...output,
+          truncated: output.truncated || result.stdout.truncated || result.stderr.truncated,
           startedAt,
           finishedAt: new Date(finished).toISOString(),
           ...(result.sandbox?.runnerFailed ? { error: 'sandbox runner failed before command execution' } : {}),
@@ -84,6 +86,7 @@ async function gitText(
   if (!evidence.processStarted || evidence.exitCode !== 0 || evidence.timedOut || evidence.aborted || evidence.sandboxDenied) {
     throw new Error(`git command failed: ${command}\n${evidence.outputTail}`)
   }
+  if (evidence.truncated) throw new Error(`git command output exceeded ${GIT_OUTPUT_BYTES} bytes: ${command}`)
   return evidence.stdout ?? ''
 }
 
@@ -135,23 +138,49 @@ function parseNumstat(value: string): NumstatSummary {
   return { added, deleted, binaryFiles }
 }
 
-function isBinary(content: Buffer): boolean {
-  return content.subarray(0, 8_000).includes(0)
+interface UntrackedSummary {
+  binary: boolean
+  lines: number
 }
 
-function lineCount(content: Buffer): number {
-  if (content.length === 0) return 0
-  let lines = 0
-  for (const byte of content) if (byte === 10) lines += 1
-  return lines + (content.at(-1) === 10 ? 0 : 1)
+function updateUntracked(hash: Hash, content: Buffer): UntrackedSummary {
+  hash.update(content)
+  if (content.length === 0) return { binary: false, lines: 0 }
+  let newlines = 0
+  for (const byte of content) if (byte === 10) newlines += 1
+  return {
+    binary: content.subarray(0, 8_000).includes(0),
+    lines: newlines + (content.at(-1) === 10 ? 0 : 1),
+  }
 }
 
-async function readUntracked(workspaceRoot: string, path: string): Promise<Buffer> {
+async function hashUntracked(workspaceRoot: string, path: string, hash: Hash): Promise<UntrackedSummary> {
   const absolute = join(workspaceRoot, path)
   const stats = await lstat(absolute)
-  if (stats.isSymbolicLink()) return Buffer.from(await readlink(absolute))
-  if (stats.isFile()) return readFile(absolute)
-  throw new Error(`unsupported untracked file type: ${path}`)
+  if (stats.isSymbolicLink()) return updateUntracked(hash, Buffer.from(await readlink(absolute)))
+  if (!stats.isFile()) throw new Error(`unsupported untracked file type: ${path}`)
+
+  let binary = false
+  let sampled = 0
+  let bytes = 0
+  let newlines = 0
+  let lastByte: number | undefined
+  for await (const value of createReadStream(absolute)) {
+    const chunk = Buffer.isBuffer(value) ? value : Buffer.from(value)
+    hash.update(chunk)
+    bytes += chunk.length
+    for (const byte of chunk) if (byte === 10) newlines += 1
+    if (!binary && sampled < 8_000) {
+      const sample = chunk.subarray(0, 8_000 - sampled)
+      binary = sample.includes(0)
+      sampled += sample.length
+    }
+    lastByte = chunk.at(-1)
+  }
+  return {
+    binary,
+    lines: binary || bytes === 0 ? 0 : newlines + (lastByte === 10 ? 0 : 1),
+  }
 }
 
 export function createGitAdapter(ctx: Context): GitAdapter {
@@ -180,12 +209,11 @@ export function createGitAdapter(ctx: Context): GitAdapter {
       const hash = createHash('sha256')
       hash.update(await gitText(runner, workspaceRoot, 'git diff --binary HEAD --'))
       for (const path of untracked) {
-        const content = await readUntracked(workspaceRoot, path)
         hash.update(path)
         hash.update('\0')
-        hash.update(content)
-        if (isBinary(content)) binaryFiles.add(path)
-        else added += lineCount(content)
+        const summary = await hashUntracked(workspaceRoot, path, hash)
+        if (summary.binary) binaryFiles.add(path)
+        else added += summary.lines
       }
 
       const manifestFiles = changedFiles.filter(isManifestFile)

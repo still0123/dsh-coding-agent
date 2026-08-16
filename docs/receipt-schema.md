@@ -64,6 +64,7 @@ interface CommandEvidence {
   durationMs: number
   outputDigest: `sha256:${string}`
   outputTail: string
+  truncated?: boolean
   stdout?: string
   stderr?: string
   combinedOutput?: string
@@ -76,9 +77,13 @@ interface CommandEvidence {
 During execution, `combinedOutput` is the bounded `stdout + "\n" + stderr`;
 ANSI is removed only for literal matching. Each stream is captured up to 256
 KiB. The digest covers the complete bounded capture and the display tail is at
-most 4,000 characters. Receipt construction may omit the optional raw capture
-fields after deriving the digest and tail. Spawn, sandbox, timeout, and abort
-states are not represented as an invented exit code.
+most 4,000 characters. `truncated` is true when either DSH's shell capture or the
+plugin's own bound dropped bytes; truncated evidence is never eligible for RED
+or GREEN matching. Receipt construction may omit the optional raw capture fields
+after deriving the digest and tail. Spawn, sandbox, timeout, abort, and truncation
+states are not represented as an invented exit code. Internal Git evidence is
+also fail-closed on truncation, while untracked regular files are hashed and
+line-counted as streams instead of being loaded whole into memory.
 
 Initial reproduction is exact only when the process started, was not timed out,
 aborted, or sandbox-denied, the declared failure exit-code rule matches, and

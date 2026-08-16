@@ -59,6 +59,7 @@ export interface CommandEvidence {
   durationMs: number
   outputDigest: string
   outputTail: string
+  truncated?: boolean
   stdout?: string
   stderr?: string
   combinedOutput?: string
@@ -304,6 +305,7 @@ function completedCommand(evidence: CommandEvidence): evidence is CommandEvidenc
     !evidence.timedOut &&
     !evidence.aborted &&
     !evidence.sandboxDenied &&
+    !evidence.truncated &&
     typeof evidence.exitCode === 'number'
   )
 }

@@ -138,6 +138,7 @@ describe('literal matchers', () => {
     expect(matchesFailure(evidence({ timedOut: true }), expected)).toBe(false)
     expect(matchesFailure(evidence({ aborted: true }), expected)).toBe(false)
     expect(matchesFailure(evidence({ sandboxDenied: true }), expected)).toBe(false)
+    expect(matchesFailure(evidence({ truncated: true }), expected)).toBe(false)
     expect(matchesFailure(evidence({ processStarted: false }), expected)).toBe(false)
   })
 
@@ -156,6 +157,7 @@ describe('literal matchers', () => {
       true,
     )
     expect(matchesSuccess(evidence({ exitCode: 0, timedOut: true }))).toBe(false)
+    expect(matchesSuccess(evidence({ exitCode: 0, truncated: true }))).toBe(false)
   })
 })
 
