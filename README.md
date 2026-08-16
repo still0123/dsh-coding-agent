@@ -1,5 +1,11 @@
 # dsh-reprofix
 
+> [!IMPORTANT]
+> This repository is archived. Development continues in
+> [still0123/dsh-coding-agent](https://github.com/still0123/dsh-coding-agent),
+> which preserves this repository's Git history and provides both the general
+> Coding Preset and the strict ReproFix mode.
+
 [![CI](https://github.com/still0123/dshagent/actions/workflows/ci.yml/badge.svg)](https://github.com/still0123/dshagent/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![DSH](https://img.shields.io/badge/DeepSeek%20Harness-0.1.0--rc.6-4e51e8)](https://github.com/deepseek-ai/deepseek-harness)
