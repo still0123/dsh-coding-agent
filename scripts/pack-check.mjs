@@ -11,9 +11,10 @@ const pnpmCli = process.env.npm_execpath
 if (!pnpmCli) throw new Error('pack:check must run through pnpm')
 const runPnpm = (args, options) => /\.(?:c?js|mjs)$/i.test(pnpmCli)
   ? execFileSync(process.execPath, [pnpmCli, ...args], options)
-  : process.platform === 'win32' && /\.cmd$/i.test(pnpmCli)
-    ? execFileSync('cmd.exe', ['/d', '/s', '/c', pnpmCli, ...args], options)
-    : execFileSync(pnpmCli, args, options)
+  : execFileSync(pnpmCli, args, {
+      ...options,
+      ...(process.platform === 'win32' ? { shell: true } : {}),
+    })
 const temporary = mkdtempSync(join(tmpdir(), 'dsh-reprofix-pack-'))
 const packed = join(temporary, 'packed')
 const consumer = join(temporary, 'consumer')
