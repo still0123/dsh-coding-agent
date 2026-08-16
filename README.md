@@ -1,6 +1,6 @@
-# dsh-reprofix
+# dsh-coding-agent
 
-[![CI](https://github.com/still0123/dshagent/actions/workflows/ci.yml/badge.svg)](https://github.com/still0123/dshagent/actions/workflows/ci.yml)
+[![CI](https://github.com/still0123/dsh-coding-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/still0123/dsh-coding-agent/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![DSH](https://img.shields.io/badge/DeepSeek%20Harness-0.1.0--rc.6-4e51e8)](https://github.com/deepseek-ai/deepseek-harness)
 
@@ -109,8 +109,8 @@ repair_failure
 每次提交启动一个独立的 DSH headless 进程。
 
 ```bash
-git clone https://github.com/still0123/dshagent.git
-cd dshagent
+git clone https://github.com/still0123/dsh-coding-agent.git
+cd dsh-coding-agent
 
 npm install -g pnpm@11.7.0
 pnpm install --frozen-lockfile --ignore-scripts
@@ -125,8 +125,8 @@ pnpm client
 Windows PowerShell：
 
 ```powershell
-git clone https://github.com/still0123/dshagent.git
-cd dshagent
+git clone https://github.com/still0123/dsh-coding-agent.git
+cd dsh-coding-agent
 
 npm install -g pnpm@11.7.0
 pnpm install --frozen-lockfile --ignore-scripts
@@ -144,8 +144,8 @@ pnpm client
 可选参数：
 
 ```bash
-pnpm exec dsh-reprofix-client --no-open
-pnpm exec dsh-reprofix-client --port 4317
+pnpm exec dshagent-client --no-open
+pnpm exec dshagent-client --port 4317
 ```
 
 ## 安装到已有 DSH Web
@@ -153,8 +153,8 @@ pnpm exec dsh-reprofix-client --port 4317
 先构建本项目，并把本地 checkout 安装到 `web` profile：
 
 ```bash
-git clone https://github.com/still0123/dshagent.git
-cd dshagent
+git clone https://github.com/still0123/dsh-coding-agent.git
+cd dsh-coding-agent
 
 npm install -g pnpm@11.7.0
 pnpm install --frozen-lockfile --ignore-scripts
@@ -168,7 +168,7 @@ dsh plugin --profile web add .
 
 ```bash
 DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
-node "$DSH_HOME/profiles/web/node_modules/dsh-reprofix/scripts/install-presets.mjs" install
+node "$DSH_HOME/profiles/web/node_modules/dsh-coding-agent/scripts/install-presets.mjs" install
 
 dsh web
 ```
@@ -184,7 +184,7 @@ $DSH_HOME/.agent-presets/reprofix
 显式增加 `--force`：
 
 ```bash
-node "$DSH_HOME/profiles/web/node_modules/dsh-reprofix/scripts/install-presets.mjs" install --force
+node "$DSH_HOME/profiles/web/node_modules/dsh-coding-agent/scripts/install-presets.mjs" install --force
 ```
 
 新建普通开发会话时选择 **DSHAgent**；修复已有可复现故障时选择 **ReproFix**。

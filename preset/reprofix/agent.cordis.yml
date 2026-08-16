@@ -42,4 +42,4 @@
         provider: spawn
 
     - id: reprofix
-      name: dsh-reprofix
+      name: dsh-coding-agent

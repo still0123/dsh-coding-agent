@@ -108,7 +108,7 @@ describe('real DSH ReproFix preset mount', () => {
       '@deepseek-ai/dsh-tool-fs': toolModule(['read', 'write', 'edit']),
       '@deepseek-ai/dsh-tool-fs-search': toolModule(['glob', 'grep']),
       '@deepseek-ai/dsh-workflow-worker-thread': WorkflowWorker,
-      'dsh-reprofix': ReproFix,
+      'dsh-coding-agent': ReproFix,
     }
     ctx.loader.internal = {
       import: async (specifier: string) => {

@@ -1,10 +1,10 @@
 {
-  "name": "dsh-reprofix",
+  "name": "dsh-coding-agent",
   "version": "0.1.0",
-  "description": "Reproduce-first repair transactions for DeepSeek Harness.",
+  "description": "DSH coding-agent distribution with a reproduce-first ReproFix repair mode.",
   "type": "module",
   "bin": {
-    "dsh-reprofix-client": "./client/server.mjs",
+    "dshagent-client": "./client/server.mjs",
     "dshagent-presets": "./scripts/install-presets.mjs"
   },
   "main": "./dist/index.js",

@@ -61,7 +61,7 @@ export function buildPrompt(input) {
 export function dshLaunch(nodeEntry, platform = process.platform) {
   if (nodeEntry) return { command: process.execPath, prefixArgs: [nodeEntry] }
   if (platform === 'win32') {
-    throw new Error('Windows requires @deepseek-ai/dsh beside dsh-reprofix or DSH_NODE_ENTRY pointing to its lib/bin.js')
+    throw new Error('Windows requires @deepseek-ai/dsh beside dsh-coding-agent or DSH_NODE_ENTRY pointing to its lib/bin.js')
   }
   return { command: process.env.DSH_BIN || 'dsh', prefixArgs: [] }
 }
@@ -85,7 +85,7 @@ async function existingDshLaunch(root, platform = process.platform) {
 async function createPatch(root = packageRoot) {
   const bridge = join(root, 'dist', 'client-scope.js')
   await stat(bridge)
-  const patch = join(tmpdir(), `dsh-reprofix-client-${process.pid}-${randomBytes(6).toString('hex')}.yml`)
+  const patch = join(tmpdir(), `dshagent-client-${process.pid}-${randomBytes(6).toString('hex')}.yml`)
   try {
     await writeFile(patch, `- insert:\n    - id: reprofix-local-client\n      name: ${JSON.stringify(bridge)}\n`)
     return patch
@@ -334,7 +334,7 @@ export async function createLocalClient(options = {}) {
 }
 
 function usage() {
-  return 'Usage: dsh-reprofix-client [--port <number>] [--no-open]\n'
+  return 'Usage: dshagent-client [--port <number>] [--no-open]\n'
 }
 
 export function createShutdownHandler(client, runtime = process) {

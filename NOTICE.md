@@ -1,4 +1,4 @@
-dsh-reprofix
+dsh-coding-agent
 Copyright (c) 2026 dsh2026
 
 This project is derived from dsh-inspect by dsh2026 at commit

@@ -14,7 +14,7 @@ const runPnpm = (args, options) => /\.(?:c?js|mjs)$/i.test(pnpmCli)
   ? execFileSync(process.execPath, [pnpmCli, ...args], options)
   : execFileSync(pnpmCli, args, options)
 const runNpm = (args, options) => execFileSync(process.execPath, [npmCli, ...args], options)
-const temporary = mkdtempSync(join(tmpdir(), 'dsh-reprofix-pack-'))
+const temporary = mkdtempSync(join(tmpdir(), 'dsh-coding-agent-pack-'))
 const packed = join(temporary, 'packed')
 const consumer = join(temporary, 'consumer')
 
@@ -55,7 +55,7 @@ try {
     ...requiredPeers,
   }
   writeFileSync(join(consumer, 'package.json'), JSON.stringify({
-    name: 'dsh-reprofix-pack-consumer',
+    name: 'dsh-coding-agent-pack-consumer',
     private: true,
     type: 'module',
     packageManager: manifest.packageManager,
@@ -94,13 +94,13 @@ try {
   })
   readFileSync(join(presetHome, '.agent-presets', 'dshagent', 'agent.cordis.yml'))
   readFileSync(join(presetHome, '.agent-presets', 'reprofix', 'agent.cordis.yml'))
-  const clientEntry = join(installed, manifest.bin['dsh-reprofix-client'])
+  const clientEntry = join(installed, manifest.bin['dshagent-client'])
   const clientHelp = execFileSync(process.execPath, [clientEntry, '--help'], {
     cwd: consumer,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'inherit'],
   })
-  if (!clientHelp.includes('dsh-reprofix-client')) throw new Error('packed client bin did not render help')
+  if (!clientHelp.includes('dshagent-client')) throw new Error('packed client bin did not render help')
   console.log(`pack:check imported ${manifest.name} and executed its client bin from ${tarball}`)
 } finally {
   rmSync(temporary, { recursive: true, force: true })

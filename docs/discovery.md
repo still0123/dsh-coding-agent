@@ -58,7 +58,7 @@ fixed standard preset. It mounts:
 - standard search tools: `glob`, `grep`;
 - the platform shell tool: `bash` or `pwsh`;
 - one isolated `workflowEngine` realm with `@deepseek-ai/dsh-workflow-worker-thread`;
-- the `dsh-reprofix` plugin in that same realm.
+- the `dsh-coding-agent` plugin in that same realm.
 
 The locked-state allowlist is `read`, `glob`, `grep`, and `repair_failure`.
 `write`, `edit`, `bash`, and `pwsh` are denied before the exact RED gate; unknown

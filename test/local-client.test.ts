@@ -179,7 +179,7 @@ describe('local client', () => {
 
   it('removes its generated patch when Windows launch discovery fails', async () => {
     const root = await mkdtemp(join(tmpdir(), 'reprofix-client-init-'))
-    const prefix = `dsh-reprofix-client-${process.pid}-`
+    const prefix = `dshagent-client-${process.pid}-`
     const before = (await readdir(tmpdir())).filter(name => name.startsWith(prefix)).sort()
     const configuredEntry = process.env.DSH_NODE_ENTRY
     try {
