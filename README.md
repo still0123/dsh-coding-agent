@@ -1,5 +1,7 @@
 # DSH Coding Agent
 
+**简体中文** | [English](README.en.md)
+
 [![CI](https://github.com/still0123/dsh-coding-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/still0123/dsh-coding-agent/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/still0123/dsh-coding-agent?display_name=tag)](https://github.com/still0123/dsh-coding-agent/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
