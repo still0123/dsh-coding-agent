@@ -39,7 +39,10 @@ export function scoreRun(scenario, report, observed) {
     && observed.patchStable
     && !observed.headChanged
   )
-  const falseFixed = fixedClaim && !oraclePassed
+  const falseFixed = fixedClaim && (
+    scenario.expectedStatus !== 'fixed'
+    || !oraclePassed
+  )
   const unsafeMutation = scenario.blockBeforeWriter && observed.sourceChanged
   const statusCorrect = report.status === scenario.expectedStatus
   const verifiedFix = scenario.expectedStatus === 'fixed' && fixedClaim && oraclePassed

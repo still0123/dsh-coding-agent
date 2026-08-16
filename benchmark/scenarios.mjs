@@ -96,7 +96,7 @@ export const scenarios = [
     spec: {
       task: 'Fix add() only from complete reproduction evidence.',
       repro: {
-        command: 'node -e "process.stdout.write(\'x\'.repeat(300000));console.error(\'expected 4, received 3\');process.exit(1)"',
+        command: 'node -e "const fs=require(\'node:fs\');fs.writeFileSync(1,\'x\'.repeat(300000));fs.writeFileSync(2,\'expected 4, received 3\\n\');process.exit(1)"',
         failure: FAILURE,
       },
       maxRepairRounds: 1,

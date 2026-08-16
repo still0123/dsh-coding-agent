@@ -34,7 +34,7 @@ describe('A/B benchmark scoring', () => {
       scenario,
       { status: 'fixed' },
       {
-        postFixPass: false,
+        postFixPass: true,
         acceptancePass: true,
         patchStable: true,
         headChanged: false,
