@@ -9,22 +9,94 @@
 
 ![DSH Coding Agent banner](docs/images/readme-banner.svg)
 
-A coding-agent distribution built on DeepSeek Harness and Cordis. It provides
-a general Coding Preset and a strict ReproFix repair mode.
+## When a coding agent claims "fixed", who verifies it?
 
-> **Auditable execution contract:** observe the declared failure before
-> mutation; unlock exactly one writer only after RED matches; rerun every
-> postcondition against the final patch; report `fixed` only when all checks
-> pass.
+General-purpose coding agents rely on model cooperation for correctness. The
+prompt asks them to reproduce, repair, then verify, but the model may skip
+reproduction and start editing immediately; it reports "tests pass" although
+nothing re-ran them independently; and when the task ends, no durable evidence
+of what happened remains.
 
-This project does not reimplement the DSH Agent Loop, model adapters, Session,
-Sandbox, or persistence. It implements Presets, the CLI authorization boundary,
-the ReproFix Guard and state machine, and durable Receipts on official DSH
+dsh-coding-agent turns that convention into an **auditable execution
+contract**, enforced by code instead of natural language:
+
+> **Observe the user-declared failure on the current machine (RED) before
+> unlocking exactly one writer to modify code. After the repair, the wrapper
+> itself reruns the reproduction and every acceptance command. Only when the
+> patch fingerprint is unchanged during validation and every check passes does
+> the run return `fixed`.**
+
+The flow has nine terminal states. Only `fixed` returns `ok: true`; every other
+state returns with its reason and evidence.
+
+The project is built on **DeepSeek Harness / Cordis (DSH)**, which provides the
+Agent Loop, model adapters, tool sandbox, Session, and persistence. This
+project does not reimplement them; it implements Presets, the CLI authorization
+boundary, the ReproFix Guard, the state machine, and Receipts on official DSH
 extension points.
 
-> [!IMPORTANT]
-> The current stable release is `0.1.0`, distributed through GitHub Releases.
-> It has not been published to the npm registry.
+## Why "just write it in the prompt" is not enough
+
+Prompt-level constraints are probabilistic: the model follows them most of the
+time. ReproFix replaces that trust with mechanical guarantees:
+
+| Prompt-driven agents | ReproFix execution contract |
+| --- | --- |
+| Asking the model to "reproduce first" — it may still start editing right away | RED gate: until the failure signature matches, `write`, `edit`, `bash`, `pwsh`, and unknown tools are denied by the Guard |
+| The model reports "tests pass" — nothing verifies it actually ran them | GREEN comes from the plugin rerunning the reproduction and every acceptance command; writer prose is never trusted |
+| Truncated or timed-out output can be misread as success | Truncation, timeout, cancellation, or sandbox denial can never serve as RED / GREEN evidence |
+| When the task ends only a chat log remains — hard to audit | Every terminal state writes a `reprofix/receipt`: exit codes, output digests, patch fingerprint, validation details |
+
+## How ReproFix Works
+
+ReproFix registers one model-facing DSH tool:
+
+```text
+repair_failure
+```
+
+When invoked, the plugin:
+
+1. Resolves the canonical Git root.
+2. Rejects a workspace containing tracked or untracked changes.
+3. Runs `repro.command`.
+4. Matches both the exit-code rule and every case-sensitive `outputIncludes`
+   literal.
+5. Unlocks edit/write for exactly one writer only after a match; Shell remains
+   unavailable.
+6. Starts at most one writer Agent to diagnose and patch the code.
+7. Reruns the reproduction and up to 10 acceptance commands through the
+   wrapper.
+8. Compares HEAD and patch fingerprints before and after validation.
+9. Appends a `reprofix/receipt` event to the DSH Session.
+
+`failureLog` is diagnostic context only. It can never replace a reproduction
+observed on the current machine.
+
+## Mechanical Guarantees
+
+These properties are enforced by code rather than writer prose:
+
+- A dirty workspace cannot start reproduction or a writer.
+- Truncated, timed-out, cancelled, sandbox-denied, or unstarted commands cannot
+  satisfy RED or GREEN.
+- RED requires both the exit-code rule and every output literal.
+- Before RED, the Guard denies `write`, `edit`, `bash`, `pwsh`, and unknown
+  tools.
+- After RED, writer capability tools remain limited to `read`, `glob`, `grep`,
+  `edit`, and `write`, plus DSH's `structured_output` completion channel. Bash,
+  PowerShell, and arbitrary command tools remain denied.
+- A lock under `$DSH_HOME/dsh-coding-agent/locks` excludes concurrent processes
+  targeting the same canonical Git root.
+- HEAD is checked after reproduction, the writer, and validation.
+- GREEN is produced only by wrapper-owned command execution.
+- Tracked diffs and untracked files both enter the versioned patch fingerprint.
+- A validation-time patch change prevents `fixed`.
+- Every controlled terminal path attempts a `reprofix/receipt`; persistence
+  failures are reported to stderr.
+
+Each output stream is retained up to 256 KiB. Any truncation makes matching fail
+closed instead of inferring success from incomplete evidence.
 
 ## Architecture and Ownership
 
@@ -54,31 +126,21 @@ mutation. After RED, the writer's capability tools remain limited to
 read/search/edit/write, plus DSH's structured-result completion channel. Every
 command remains wrapper-owned.
 
-## How ReproFix Works
+## Result Statuses
 
-ReproFix registers one model-facing DSH tool:
+| Status | Meaning |
+| --- | --- |
+| `fixed` | Exact RED observed; the final patch passed reproduction and every acceptance check without changing during validation |
+| `not_reproduced` | Current command output did not match the declared failure; no writer started |
+| `blocked_dirty_workspace` | Workspace was dirty at startup; no reproduction or writer ran |
+| `blocked_repro_side_effect` | Reproduction changed the workspace or HEAD; no writer started |
+| `blocked_active_run` | Another process sharing the same `DSH_HOME` holds the canonical-root lock |
+| `repair_failed` | The writer produced no validatable patch or its Workflow failed |
+| `validation_failed` | A patch exists, but reproduction, acceptance, HEAD, or fingerprint validation failed |
+| `cancelled` | The host cancelled the run or command execution was aborted |
+| `infrastructure_error` | Git, the lock directory, Session persistence, model adapter, or another local dependency prevented completion |
 
-```text
-repair_failure
-```
-
-When invoked, the plugin:
-
-1. Resolves the canonical Git root.
-2. Rejects a workspace containing tracked or untracked changes.
-3. Runs `repro.command`.
-4. Matches both the exit-code rule and every case-sensitive `outputIncludes`
-   literal.
-5. Unlocks edit/write for exactly one writer only after a match; Shell remains
-   unavailable.
-6. Starts at most one writer Agent to diagnose and patch the code.
-7. Reruns the reproduction and up to 10 acceptance commands through the
-   wrapper.
-8. Compares HEAD and patch fingerprints before and after validation.
-9. Appends a `reprofix/receipt` event to the DSH Session.
-
-`failureLog` is diagnostic context only. It can never replace a reproduction
-observed on the current machine.
+Only `fixed` returns `ok: true`.
 
 ## When to Use It
 
@@ -114,6 +176,10 @@ and ReproFix returns a Receipt-backed `infrastructure_error` after RED.
 
 ## Install the Release
 
+> [!NOTE]
+> The current stable release is `0.1.0`, distributed through GitHub Releases
+> with a `.sha256` checksum. It has not been published to the npm registry yet.
+
 ```bash
 npm install -g \
   https://github.com/still0123/dsh-coding-agent/releases/download/v0.1.0/dsh-coding-agent-0.1.0.tgz
@@ -121,10 +187,6 @@ npm install -g \
 dshagent --help
 dshagent presets install
 ```
-
-The Release also includes a `.sha256` file. Until the npm registry package is
-published, the documentation intentionally does not use
-`npm install -g dsh-coding-agent`.
 
 ## Quick Start: Text CLI
 
@@ -263,47 +325,6 @@ Agent.
 | `acceptance` | Additional post-fix commands, at most 10 |
 | `maxRepairRounds` | Writer round limit, `1-3`, default `1` |
 
-## Result Statuses
-
-| Status | Meaning |
-| --- | --- |
-| `fixed` | Exact RED observed; the final patch passed reproduction and every acceptance check without changing during validation |
-| `not_reproduced` | Current command output did not match the declared failure; no writer started |
-| `blocked_dirty_workspace` | Workspace was dirty at startup; no reproduction or writer ran |
-| `blocked_repro_side_effect` | Reproduction changed the workspace or HEAD; no writer started |
-| `blocked_active_run` | Another process sharing the same `DSH_HOME` holds the canonical-root lock |
-| `repair_failed` | The writer produced no validatable patch or its Workflow failed |
-| `validation_failed` | A patch exists, but reproduction, acceptance, HEAD, or fingerprint validation failed |
-| `cancelled` | The host cancelled the run or command execution was aborted |
-| `infrastructure_error` | Git, the lock directory, Session persistence, model adapter, or another local dependency prevented completion |
-
-Only `fixed` returns `ok: true`.
-
-## Mechanical Guarantees
-
-These properties are enforced by code rather than writer prose:
-
-- A dirty workspace cannot start reproduction or a writer.
-- Truncated, timed-out, cancelled, sandbox-denied, or unstarted commands cannot
-  satisfy RED or GREEN.
-- RED requires both the exit-code rule and every output literal.
-- Before RED, the Guard denies `write`, `edit`, `bash`, `pwsh`, and unknown
-  tools.
-- After RED, writer capability tools remain limited to `read`, `glob`, `grep`,
-  `edit`, and `write`, plus DSH's `structured_output` completion channel. Bash,
-  PowerShell, and arbitrary command tools remain denied.
-- A lock under `$DSH_HOME/dsh-coding-agent/locks` excludes concurrent processes
-  targeting the same canonical Git root.
-- HEAD is checked after reproduction, the writer, and validation.
-- GREEN is produced only by wrapper-owned command execution.
-- Tracked diffs and untracked files both enter the versioned patch fingerprint.
-- A validation-time patch change prevents `fixed`.
-- Every controlled terminal path attempts a `reprofix/receipt`; persistence
-  failures are reported to stderr.
-
-Each output stream is retained up to 256 KiB. Any truncation makes matching fail
-closed instead of inferring success from incomplete evidence.
-
 ## Current Security Boundary
 
 ReproFix constrains when and how the writer can mutate code, but it is not full
@@ -378,9 +399,9 @@ pnpm test:preset-smoke
 pnpm pack:check
 ```
 
-CI runs the CLI/client and clean-package checks separately on macOS and Windows.
-The architecture and DSH ownership boundary are documented in
-[Architecture](docs/architecture.md).
+CI runs the full verification suite on Linux, plus CLI/client tests and
+clean-package checks on macOS and Windows. The architecture and DSH ownership
+boundary are documented in [Architecture](docs/architecture.md).
 
 ## Compatibility
 
