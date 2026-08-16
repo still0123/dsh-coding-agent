@@ -1,4 +1,4 @@
-import { createHash, type Hash } from 'node:crypto'
+import { createHash } from 'node:crypto'
 import { createReadStream } from 'node:fs'
 import { lstat, readlink } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -140,26 +140,35 @@ function parseNumstat(value: string): NumstatSummary {
 
 interface UntrackedSummary {
   binary: boolean
+  contentDigest: Buffer
+  executable: boolean
   lines: number
+  type: 'file' | 'symlink'
 }
 
-function updateUntracked(hash: Hash, content: Buffer): UntrackedSummary {
-  hash.update(content)
-  if (content.length === 0) return { binary: false, lines: 0 }
+function summarizeUntracked(content: Buffer, executable: boolean, type: UntrackedSummary['type']): UntrackedSummary {
+  if (content.length === 0) {
+    return { binary: false, contentDigest: createHash('sha256').update(content).digest(), executable, lines: 0, type }
+  }
   let newlines = 0
   for (const byte of content) if (byte === 10) newlines += 1
   return {
     binary: content.subarray(0, 8_000).includes(0),
+    contentDigest: createHash('sha256').update(content).digest(),
+    executable,
     lines: newlines + (content.at(-1) === 10 ? 0 : 1),
+    type,
   }
 }
 
-async function hashUntracked(workspaceRoot: string, path: string, hash: Hash): Promise<UntrackedSummary> {
+async function summarizeUntrackedFile(workspaceRoot: string, path: string): Promise<UntrackedSummary> {
   const absolute = join(workspaceRoot, path)
   const stats = await lstat(absolute)
-  if (stats.isSymbolicLink()) return updateUntracked(hash, Buffer.from(await readlink(absolute)))
+  const executable = (stats.mode & 0o111) !== 0
+  if (stats.isSymbolicLink()) return summarizeUntracked(Buffer.from(await readlink(absolute)), executable, 'symlink')
   if (!stats.isFile()) throw new Error(`unsupported untracked file type: ${path}`)
 
+  const contentHash = createHash('sha256')
   let binary = false
   let sampled = 0
   let bytes = 0
@@ -167,7 +176,7 @@ async function hashUntracked(workspaceRoot: string, path: string, hash: Hash): P
   let lastByte: number | undefined
   for await (const value of createReadStream(absolute)) {
     const chunk = Buffer.isBuffer(value) ? value : Buffer.from(value)
-    hash.update(chunk)
+    contentHash.update(chunk)
     bytes += chunk.length
     for (const byte of chunk) if (byte === 10) newlines += 1
     if (!binary && sampled < 8_000) {
@@ -179,7 +188,10 @@ async function hashUntracked(workspaceRoot: string, path: string, hash: Hash): P
   }
   return {
     binary,
+    contentDigest: contentHash.digest(),
+    executable,
     lines: binary || bytes === 0 ? 0 : newlines + (lastByte === 10 ? 0 : 1),
+    type: 'file',
   }
 }
 
@@ -206,12 +218,20 @@ export function createGitAdapter(ctx: Context): GitAdapter {
 
       const untracked = (await gitText(runner, workspaceRoot, 'git ls-files --others --exclude-standard -z'))
         .split('\0').filter(Boolean).sort()
-      const hash = createHash('sha256')
-      hash.update(await gitText(runner, workspaceRoot, 'git diff --binary HEAD --'))
+      const trackedPatchDigest = createHash('sha256')
+        .update(await gitText(runner, workspaceRoot, 'git diff --binary HEAD --'))
+        .digest()
+      const hash = createHash('sha256').update('reprofix.patch/v2\0').update(trackedPatchDigest)
       for (const path of untracked) {
-        hash.update(path)
-        hash.update('\0')
-        const summary = await hashUntracked(workspaceRoot, path, hash)
+        const summary = await summarizeUntrackedFile(workspaceRoot, path)
+        const pathBytes = Buffer.from(path)
+        const pathLength = Buffer.allocUnsafe(4)
+        pathLength.writeUInt32BE(pathBytes.length)
+        hash.update(pathLength)
+        hash.update(pathBytes)
+        hash.update(summary.type === 'file' ? '\x01' : '\x02')
+        hash.update(summary.executable ? '\x01' : '\x00')
+        hash.update(summary.contentDigest)
         if (summary.binary) binaryFiles.add(path)
         else added += summary.lines
       }

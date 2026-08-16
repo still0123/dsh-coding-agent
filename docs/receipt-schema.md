@@ -105,10 +105,13 @@ interface PatchEvidence {
 }
 ```
 
-The fingerprint canonically covers tracked and untracked patch state. It is
-computed after a writer round, immediately before validation, and after all
-validation commands. A mismatch makes validation fail. Any later writer round
-increments `revision` and invalidates prior green checks.
+The fingerprint canonically covers tracked and untracked patch state. The
+versioned encoding hashes the tracked binary diff separately, then encodes each
+sorted untracked path with a fixed-width path length, file type, executable bit,
+and fixed-length content digest. This keeps record boundaries unambiguous while
+streaming large files. It is computed after a writer round, immediately before
+validation, and after all validation commands. A mismatch makes validation fail.
+Any later writer round increments `revision` and invalidates prior green checks.
 
 The observable score is:
 

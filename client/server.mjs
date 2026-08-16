@@ -117,6 +117,21 @@ form.addEventListener('submit',async event=>{event.preventDefault();button.disab
 </script></body></html>`
 }
 
+export async function waitForSettlement(promise, timeoutMs = 5_000) {
+  let timeout
+  try {
+    await Promise.race([
+      promise,
+      new Promise(resolvePromise => {
+        timeout = setTimeout(resolvePromise, timeoutMs)
+        timeout.unref?.()
+      }),
+    ])
+  } finally {
+    if (timeout !== undefined) clearTimeout(timeout)
+  }
+}
+
 export async function createLocalClient(options = {}) {
   const token = options.token ?? randomBytes(24).toString('base64url')
   const spawnProcess = options.spawnProcess ?? spawn
@@ -210,10 +225,7 @@ export async function createLocalClient(options = {}) {
     },
     async close() {
       if (activeChild?.exitCode === null) activeChild.kill()
-      await Promise.race([
-        activeDone,
-        new Promise(resolvePromise => setTimeout(resolvePromise, 5_000)),
-      ])
+      await waitForSettlement(activeDone)
       const closed = new Promise(resolvePromise => server.close(resolvePromise))
       server.closeAllConnections?.()
       await closed

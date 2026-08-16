@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, symlink, writeFile } from 'node:fs/promises'
+import { chmod, mkdtemp, readFile, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { execFile } from 'node:child_process'
@@ -198,6 +198,43 @@ describe('git adapter', () => {
       score: lines + 10,
     })
     expect(second.added).toBe(lines)
+    expect(second.fingerprint).not.toBe(first.fingerprint)
+  })
+
+  it.skipIf(process.platform === 'win32')('includes an untracked file executable bit in its fingerprint', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'reprofix-git-mode-'))
+    await exec('git', ['init', '-q'], { cwd: root })
+    await exec('git', ['config', 'user.email', 'test@example.com'], { cwd: root })
+    await exec('git', ['config', 'user.name', 'Test'], { cwd: root })
+    await writeFile(join(root, 'tracked.txt'), 'base\n')
+    await exec('git', ['add', '.'], { cwd: root })
+    await exec('git', ['commit', '-qm', 'base'], { cwd: root })
+    const script = join(root, 'script.sh')
+    await writeFile(script, '#!/bin/sh\nexit 0\n', { mode: 0o644 })
+
+    const shell = {
+      resolve: (value: unknown) => value,
+      async run(spec: { command: string; workdir: string }) {
+        try {
+          const { stdout, stderr } = await exec('/bin/sh', ['-c', spec.command], { cwd: spec.workdir, encoding: 'utf8' })
+          return shellResult({ stdout: { text: stdout, truncated: false }, stderr: { text: stderr, truncated: false } })
+        } catch (error: unknown) {
+          const failure = error as { code?: number; stdout?: string; stderr?: string }
+          return shellResult({
+            exitCode: failure.code ?? 1,
+            stdout: { text: failure.stdout ?? '', truncated: false },
+            stderr: { text: failure.stderr ?? String(error), truncated: false },
+          })
+        }
+      },
+    }
+    const adapter = createGitAdapter({ shell } as never)
+    const first = await adapter.patch(root, 1)
+    await chmod(script, 0o755)
+    const second = await adapter.patch(root, 1)
+
+    expect(first.changedFiles).toEqual(['script.sh'])
+    expect(second.changedFiles).toEqual(['script.sh'])
     expect(second.fingerprint).not.toBe(first.fingerprint)
   })
 

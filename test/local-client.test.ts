@@ -7,7 +7,7 @@ import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
-import { buildPrompt, createLocalClient, dshLaunch, validHost } from '../client/server.mjs'
+import { buildPrompt, createLocalClient, dshLaunch, validHost, waitForSettlement } from '../client/server.mjs'
 import { apply as applyClientScope, mountReproFix } from '../src/client-scope.js'
 
 class FakeChild extends EventEmitter {
@@ -81,6 +81,22 @@ describe('local client', () => {
     expect(validHost('localhost:4317')).toBe(false)
     expect(validHost('evil.example:4317')).toBe(false)
     expect(validHost(undefined)).toBe(false)
+  })
+
+  it('clears settlement timers after early completion and timeout', async () => {
+    vi.useFakeTimers()
+    try {
+      await waitForSettlement(Promise.resolve(), 5_000)
+      expect(vi.getTimerCount()).toBe(0)
+
+      const waiting = waitForSettlement(new Promise(() => {}), 10)
+      expect(vi.getTimerCount()).toBe(1)
+      await vi.advanceTimersByTimeAsync(10)
+      await waiting
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('uses the DSH Node entry on both macOS and Windows without a command shell', () => {
