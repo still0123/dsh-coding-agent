@@ -132,8 +132,8 @@ pnpm client
 可选参数：
 
 ```bash
-pnpm exec dsh-reprofix-client --no-open
-pnpm exec dsh-reprofix-client --port 4317
+pnpm client -- --no-open
+pnpm client -- --port 4317
 ```
 
 ## 安装到已有 DSH Web

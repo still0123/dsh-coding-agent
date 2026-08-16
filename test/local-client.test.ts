@@ -440,6 +440,55 @@ describe('local client', () => {
     }
   })
 
+  it('times out a stalled body without blocking a normal run', async () => {
+    const child = new FakeChild()
+    const spawnProcess = vi.fn(() => child as never)
+    const client = await createLocalClient({
+      token: 'test-token',
+      patch: '/tmp/reprofix-test.yml',
+      launch: { command: process.execPath, prefixArgs: ['/opt/dsh/lib/bin.js'] },
+      requestBodyTimeoutMs: 25,
+      spawnProcess,
+    })
+    const url = await client.listen()
+    const requestSeen = new Promise(resolvePromise => client.server.once('request', resolvePromise))
+    const stalled = createHttpRequest(new URL('/api/run', url), {
+      method: 'POST',
+      headers: {
+        'content-length': '4096',
+        'content-type': 'application/json',
+        'x-reprofix-token': 'test-token',
+      },
+    })
+    const stalledResponse = new Promise<{ status: number | undefined; body: string }>((resolvePromise, reject) => {
+      stalled.once('error', reject)
+      stalled.once('response', response => {
+        const chunks: Buffer[] = []
+        response.on('data', chunk => chunks.push(Buffer.from(chunk)))
+        response.once('end', () => resolvePromise({
+          status: response.statusCode,
+          body: Buffer.concat(chunks).toString('utf8'),
+        }))
+      })
+    })
+    stalled.write('{"cwd":"')
+    await requestSeen
+
+    const input = { task: 'Fix the bug.', repro: { command: 'pnpm test', failure: { outputIncludes: ['failure'] } } }
+    const normalRun = post(url, 'test-token', { cwd: process.cwd(), input })
+    await vi.waitFor(() => expect(spawnProcess).toHaveBeenCalledTimes(1))
+    child.exitCode = 0
+    child.emit('close', 0)
+    expect((await normalRun).status).toBe(200)
+
+    await expect(stalledResponse).resolves.toMatchObject({
+      status: 408,
+      body: expect.stringContaining('request body timed out'),
+    })
+    stalled.destroy()
+    await client.close()
+  })
+
   it('rejects relative workspaces and oversized requests before spawning', async () => {
     const spawnProcess = vi.fn()
     const client = await createLocalClient({
@@ -462,7 +511,7 @@ describe('local client', () => {
         headers: { 'content-type': 'application/json', 'x-reprofix-token': 'test-token' },
         body: JSON.stringify({ cwd: process.cwd(), input: { task: 'x'.repeat(70_000), repro: {} } }),
       })
-      expect(oversized.status).toBe(400)
+      expect(oversized.status).toBe(413)
       expect(spawnProcess).not.toHaveBeenCalled()
     } finally {
       await client.close()

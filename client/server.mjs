@@ -13,24 +13,72 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const MAX_BODY_BYTES = 64 * 1024
 
-function json(response, status, value) {
+class RequestError extends Error {
+  constructor(status, message, closeConnection = false) {
+    super(message)
+    this.status = status
+    this.closeConnection = closeConnection
+  }
+}
+
+function json(response, status, value, closeConnection = false) {
   response.writeHead(status, {
     'content-type': 'application/json; charset=utf-8',
     'cache-control': 'no-store',
+    ...(closeConnection ? { connection: 'close' } : {}),
     'x-content-type-options': 'nosniff',
   })
   response.end(JSON.stringify(value))
 }
 
-async function readJson(request) {
-  const chunks = []
-  let bytes = 0
-  for await (const chunk of request) {
-    bytes += chunk.length
-    if (bytes > MAX_BODY_BYTES) throw new Error('request body exceeds 64 KiB')
-    chunks.push(chunk)
+function readJson(request, timeoutMs) {
+  const declaredLength = request.headers['content-length']
+  if (declaredLength !== undefined) {
+    const length = Number(declaredLength)
+    if (!Number.isSafeInteger(length) || length < 0) throw new RequestError(400, 'invalid content-length', true)
+    if (length > MAX_BODY_BYTES) throw new RequestError(413, 'request body exceeds 64 KiB', true)
   }
-  return JSON.parse(Buffer.concat(chunks).toString('utf8'))
+  return new Promise((resolvePromise, reject) => {
+    const chunks = []
+    let bytes = 0
+    let settled = false
+    const timeout = setTimeout(() => fail(new RequestError(408, 'request body timed out', true)), timeoutMs)
+    timeout.unref?.()
+    const cleanup = () => {
+      clearTimeout(timeout)
+      request.off('aborted', onAborted)
+      request.off('data', onData)
+      request.off('end', onEnd)
+      request.off('error', onError)
+    }
+    const fail = (error) => {
+      if (settled) return
+      settled = true
+      cleanup()
+      reject(error)
+    }
+    const onAborted = () => fail(new RequestError(400, 'request body aborted', true))
+    const onData = (chunk) => {
+      bytes += chunk.length
+      if (bytes > MAX_BODY_BYTES) return fail(new RequestError(413, 'request body exceeds 64 KiB', true))
+      chunks.push(chunk)
+    }
+    const onEnd = () => {
+      if (settled) return
+      settled = true
+      cleanup()
+      try {
+        resolvePromise(JSON.parse(Buffer.concat(chunks).toString('utf8')))
+      } catch (error) {
+        reject(error)
+      }
+    }
+    const onError = error => fail(error)
+    request.on('aborted', onAborted)
+    request.on('data', onData)
+    request.on('end', onEnd)
+    request.on('error', onError)
+  })
 }
 
 function validInput(value) {
@@ -150,7 +198,11 @@ export async function createLocalClient(options = {}) {
   const token = options.token ?? randomBytes(24).toString('base64url')
   const spawnProcess = options.spawnProcess ?? spawn
   const platform = options.platform ?? process.platform
+  const requestBodyTimeoutMs = options.requestBodyTimeoutMs ?? 10_000
   const shutdownTimeoutMs = options.shutdownTimeoutMs ?? 5_000
+  if (!Number.isInteger(requestBodyTimeoutMs) || requestBodyTimeoutMs < 1) {
+    throw new Error('requestBodyTimeoutMs must be a positive integer')
+  }
   if (!Number.isInteger(shutdownTimeoutMs) || shutdownTimeoutMs < 0) {
     throw new Error('shutdownTimeoutMs must be a non-negative integer')
   }
@@ -175,7 +227,7 @@ export async function createLocalClient(options = {}) {
   let activeDone = Promise.resolve()
   let stopActiveChild = async () => true
   let settleActive
-  let pendingRequest
+  const pendingRequests = new Set()
   let closing = false
   let closePromise
   const server = createServer(async (request, response) => {
@@ -196,23 +248,39 @@ export async function createLocalClient(options = {}) {
     if (request.method !== 'POST' || url.pathname !== '/api/run') return json(response, 404, { error: 'not found' })
     if (request.headers['x-reprofix-token'] !== token) return json(response, 403, { error: 'invalid token' })
     if (request.headers['content-type']?.split(';')[0] !== 'application/json') return json(response, 415, { error: 'application/json required' })
+
+    let body
+    pendingRequests.add(request)
+    try {
+      body = await readJson(request, requestBodyTimeoutMs)
+    } catch (error) {
+      if (!response.destroyed) {
+        const status = error instanceof RequestError ? error.status : 400
+        const closeConnection = error instanceof RequestError && error.closeConnection
+        json(response, status, { error: error instanceof Error ? error.message : String(error) }, closeConnection)
+      }
+      return
+    } finally {
+      pendingRequests.delete(request)
+    }
+
+    if (closing || request.aborted || response.destroyed) {
+      if (!response.destroyed) json(response, 503, { error: 'local client is shutting down' }, true)
+      return
+    }
+    if (typeof body.cwd !== 'string' || !isAbsolute(body.cwd)) return json(response, 400, { error: 'cwd must be an absolute path' })
+    if (!validInput(body.input)) return json(response, 400, { error: 'input must contain task and repro objects' })
     if (active) return json(response, 409, { error: 'a ReproFix run is already active' })
+
     active = true
     activeResponse = response
-    pendingRequest = request
     activeDone = new Promise(resolvePromise => { settleActive = resolvePromise })
     stopActiveChild = () => waitForSettlement(activeDone, shutdownTimeoutMs)
     try {
-      const body = await readJson(request)
-      if (pendingRequest === request) pendingRequest = undefined
-      if (typeof body.cwd !== 'string' || !isAbsolute(body.cwd)) throw new Error('cwd must be an absolute path')
-      if (!validInput(body.input)) throw new Error('input must contain task and repro objects')
       const cwd = resolve(body.cwd)
       const info = await stat(cwd)
       if (!info.isDirectory()) throw new Error('cwd must be a directory')
-      if (closing || request.aborted || response.destroyed) {
-        throw new Error('local client is shutting down')
-      }
+      if (closing || request.aborted || response.destroyed) throw new Error('local client is shutting down')
       const child = spawnProcess(launch.command, [
         ...launch.prefixArgs,
         '--profile', 'headless', '--patch', patch, buildPrompt(body.input),
@@ -239,7 +307,6 @@ export async function createLocalClient(options = {}) {
         active = false
         activeChild = undefined
         if (activeResponse === response) activeResponse = undefined
-        if (pendingRequest === request) pendingRequest = undefined
         if (stopActiveChild === terminateActiveChild) stopActiveChild = async () => true
         settleActive?.()
         settleActive = undefined
@@ -269,7 +336,6 @@ export async function createLocalClient(options = {}) {
       active = false
       activeChild = undefined
       if (activeResponse === response) activeResponse = undefined
-      if (pendingRequest === request) pendingRequest = undefined
       settleActive?.()
       settleActive = undefined
       if (!response.destroyed) json(response, 400, { error: error instanceof Error ? error.message : String(error) })
@@ -313,7 +379,8 @@ export async function createLocalClient(options = {}) {
       let failure
       let serverFailure
       const serverClosed = closeServer(server).catch(error => { serverFailure = error })
-      pendingRequest?.destroy()
+      for (const request of pendingRequests) request.destroy()
+      pendingRequests.clear()
       if (!(await stopActiveChild())) failure ??= new Error('DSH child did not exit after SIGKILL')
       server.closeIdleConnections?.()
       if (!(await waitForSettlement(serverClosed, shutdownTimeoutMs))) {
