@@ -23,3 +23,22 @@ jobs:
       - run: pnpm test:integration
       - run: pnpm test:preset-smoke
       - run: pnpm pack:check
+
+  client-platforms:
+    strategy:
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.11.1
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm build
+      - run: pnpm exec vitest run test/local-client.test.ts
+      - run: pnpm pack:check

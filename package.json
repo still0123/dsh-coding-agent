@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "description": "Reproduce-first repair transactions for DeepSeek Harness.",
   "type": "module",
+  "bin": {
+    "dsh-reprofix-client": "./client/server.mjs"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -14,6 +17,7 @@
   },
   "files": [
     "dist",
+    "client",
     "preset",
     "cordis.patch.yml",
     "README.md",
@@ -27,8 +31,9 @@
   "scripts": {
     "clean": "rm -rf dist",
     "typecheck": "tsc --noEmit --pretty false",
-    "test": "vitest run test/domain.test.ts test/guard.test.ts test/runner.test.ts test/workflow.test.ts test/receipt.test.ts test/phase0.smoke.test.ts",
+    "test": "vitest run test/domain.test.ts test/guard.test.ts test/runner.test.ts test/workflow.test.ts test/receipt.test.ts test/phase0.smoke.test.ts test/local-client.test.ts",
     "build": "tsc --pretty false",
+    "client": "node client/server.mjs",
     "test:integration": "vitest run test/repair-failure.integration.test.ts test/golden-fixture.integration.test.ts",
     "test:preset-smoke": "vitest run test/dsh-preset.smoke.test.ts",
     "pack:check": "node scripts/pack-check.mjs"
@@ -36,11 +41,17 @@
   "license": "MIT",
   "peerDependencies": {
     "@deepseek-ai/cordis": "4.0.1",
+    "@deepseek-ai/dsh": "0.1.0-rc.6",
     "@deepseek-ai/dsh-agent": "0.1.0-rc.6",
     "@deepseek-ai/dsh-session": "0.1.0-rc.6",
     "@deepseek-ai/dsh-shell": "0.1.0-rc.6",
     "@deepseek-ai/dsh-tools": "0.1.0-rc.6",
     "@deepseek-ai/dsh-workflow": "0.1.0-rc.6"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/dsh": {
+      "optional": true
+    }
   },
   "dependencies": {
     "@deepseek-ai/schemastery": "3.18.1"

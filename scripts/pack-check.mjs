@@ -7,6 +7,13 @@ import process from 'node:process'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const manifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
+const pnpmCli = process.env.npm_execpath
+if (!pnpmCli) throw new Error('pack:check must run through pnpm')
+const runPnpm = (args, options) => /\.(?:c?js|mjs)$/i.test(pnpmCli)
+  ? execFileSync(process.execPath, [pnpmCli, ...args], options)
+  : process.platform === 'win32' && /\.cmd$/i.test(pnpmCli)
+    ? execFileSync('cmd.exe', ['/d', '/s', '/c', pnpmCli, ...args], options)
+    : execFileSync(pnpmCli, args, options)
 const temporary = mkdtempSync(join(tmpdir(), 'dsh-reprofix-pack-'))
 const packed = join(temporary, 'packed')
 const consumer = join(temporary, 'consumer')
@@ -14,8 +21,8 @@ const consumer = join(temporary, 'consumer')
 try {
   mkdirSync(packed)
   mkdirSync(consumer)
-  execFileSync('pnpm', ['build'], { cwd: root, stdio: 'inherit' })
-  const output = execFileSync('pnpm', ['pack', '--pack-destination', packed], {
+  runPnpm(['build'], { cwd: root, stdio: 'inherit' })
+  const output = runPnpm(['pack', '--pack-destination', packed], {
     cwd: root,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'inherit'],
@@ -23,10 +30,13 @@ try {
   const tarball = output.trim().split(/\r?\n/).findLast(line => line.trim().endsWith('.tgz'))?.trim()
   if (!tarball) throw new Error(`pnpm pack did not report a tarball: ${output}`)
 
+  const requiredPeers = Object.fromEntries(
+    Object.entries(manifest.peerDependencies).filter(([name]) => !manifest.peerDependenciesMeta?.[name]?.optional),
+  )
   const dependencies = {
     [manifest.name]: `file:${resolve(root, tarball)}`,
     ...manifest.dependencies,
-    ...manifest.peerDependencies,
+    ...requiredPeers,
   }
   writeFileSync(join(consumer, 'package.json'), JSON.stringify({
     name: 'dsh-reprofix-pack-consumer',
@@ -36,7 +46,7 @@ try {
     dependencies,
   }, null, 2))
 
-  execFileSync('pnpm', ['install', '--offline', '--ignore-scripts', '--frozen-lockfile=false'], {
+  runPnpm(['install', '--offline', '--ignore-scripts', '--frozen-lockfile=false'], {
     cwd: consumer,
     stdio: 'inherit',
   })
@@ -50,7 +60,15 @@ try {
     stdio: ['ignore', 'pipe', 'inherit'],
   })
   process.stdout.write(imported)
-  console.log(`pack:check imported ${manifest.name} from ${tarball}`)
+  const installed = join(consumer, 'node_modules', manifest.name)
+  const clientEntry = join(installed, manifest.bin['dsh-reprofix-client'])
+  const clientHelp = execFileSync(process.execPath, [clientEntry, '--help'], {
+    cwd: consumer,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'inherit'],
+  })
+  if (!clientHelp.includes('dsh-reprofix-client')) throw new Error('packed client bin did not render help')
+  console.log(`pack:check imported ${manifest.name} and executed its client bin from ${tarball}`)
 } finally {
   rmSync(temporary, { recursive: true, force: true })
 }

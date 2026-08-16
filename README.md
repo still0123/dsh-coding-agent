@@ -70,6 +70,43 @@ preset roots should register `preset/reprofix` under one of those roots instead.
 The profile installation keeps the bare `dsh-reprofix` plugin package resolvable
 for the copied composition.
 
+## Local client
+
+The package also ships `dsh-reprofix-client`, a zero-dependency local Web UI for
+macOS and Windows (and Linux). It binds only to `127.0.0.1`, rejects non-numeric
+loopback `Host` headers, generates a random per-process request token, accepts one
+run at a time, and launches the installed DSH Node entry with `shell: false` in
+native Tool mode.
+
+Install the plugin and DSH in the same project, build the plugin, then start the
+client:
+
+```sh
+pnpm add dsh-reprofix @deepseek-ai/dsh@0.1.0-rc.6
+pnpm exec dsh-reprofix-client
+```
+
+The browser opens automatically. Use `--no-open` for a terminal-only launch or
+`--port 4317` to choose a fixed loopback port:
+
+```sh
+pnpm exec dsh-reprofix-client --no-open --port 4317
+```
+
+The UI asks for an absolute Git workspace and the same `repair_failure` JSON
+shown below. It starts a dedicated `dsh --profile headless` process with a
+temporary bridge that registers ReproFix only on that process's top-level Agent
+scope; subagents inherit the scoped tool/guard through DSH and no host-global
+ReproFix guard is installed. On Windows the client executes
+`@deepseek-ai/dsh/lib/bin.js` through `process.execPath`; it never invokes a
+`.cmd` shim through a shell. Set `DSH_NODE_ENTRY` only when DSH lives outside the
+client project's dependency tree.
+
+The client is a launcher, not a second repair runtime: the plugin still owns the
+clean baseline, exact RED gate, writer serialization, validation, and Receipt.
+It exposes no non-loopback listener and terminates the active DSH child when the
+client stops.
+
 ## Use
 
 Ask the ReproFix agent to repair a failure and provide deterministic evidence:
