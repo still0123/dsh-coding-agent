@@ -186,7 +186,7 @@ pnpm dshagent repair --spec repair.json --cwd . --yes --timeout 900000
 ```
 
 V0.1 CLI 为单次文本模式:创建新 Session,只输出最终文本,不提供 JSONL、Session
-ID 或 resume;这些能力计划在 V0.2 加入。
+ID 或 resume(见[路线图](#路线图))。
 
 ## 一键 Demo
 
@@ -376,6 +376,13 @@ CI 在 Linux 上执行全量验证,并在 macOS 和 Windows 上运行 CLI/客户
 | 旧版 `ctx.workflows` 或未作用域 Cordis 插件 | 不支持 |
 
 详细 API 核验见 [DSH API Discovery](docs/discovery.md)。
+
+## 路线图
+
+- **V0.2(计划)**:JSONL 输出、Session ID 与 resume;隔离 Git worktree / 容器执行;
+  发布到 npm registry。
+- **V0.1(当前)**:单次文本 CLI 模式,复现与验收在当前工作区原地执行,通过
+  GitHub Releases 分发。
 
 ## 项目来源
 

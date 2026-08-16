@@ -215,8 +215,8 @@ pnpm dshagent repair --spec repair.json --cwd . --yes --timeout 900000
 ```
 
 The V0.1 CLI is one-shot text mode. It creates a fresh Session, prints final
-text, and does not claim JSONL streaming, Session-id output, or resume support.
-Those surfaces are planned for V0.2.
+text, and does not claim JSONL streaming, Session-id output, or resume support
+(see the [Roadmap](#roadmap)).
 
 ## One-command Demos
 
@@ -413,6 +413,13 @@ boundary are documented in [Architecture](docs/architecture.md).
 | Legacy `ctx.workflows` or unscoped Cordis plugins | Unsupported |
 
 See [DSH API Discovery](docs/discovery.md) for the verified API surface.
+
+## Roadmap
+
+- **V0.2 (planned)**: JSONL output, Session-id output, and resume; isolated Git
+  worktree / container execution; npm registry publishing.
+- **V0.1 (current)**: one-shot text CLI; reproduction and acceptance run in
+  place in the current workspace; distributed through GitHub Releases.
 
 ## Provenance
 
