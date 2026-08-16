@@ -9,33 +9,48 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const manifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
 const pnpmCli = process.env.npm_execpath
 if (!pnpmCli) throw new Error('pack:check must run through pnpm')
+const npmCli = join(dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js')
 const runPnpm = (args, options) => /\.(?:c?js|mjs)$/i.test(pnpmCli)
   ? execFileSync(process.execPath, [pnpmCli, ...args], options)
-  : execFileSync(pnpmCli, args, {
-      ...options,
-      ...(process.platform === 'win32' ? { shell: true } : {}),
-    })
+  : execFileSync(pnpmCli, args, options)
+const runNpm = (args, options) => execFileSync(process.execPath, [npmCli, ...args], options)
 const temporary = mkdtempSync(join(tmpdir(), 'dsh-reprofix-pack-'))
 const packed = join(temporary, 'packed')
 const consumer = join(temporary, 'consumer')
 
+function packedFilename(output) {
+  const trimmed = output.trim()
+  if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+    const parsed = JSON.parse(trimmed)
+    const record = Array.isArray(parsed) ? parsed[0] : parsed
+    if (typeof record?.filename === 'string') return record.filename
+  }
+  return trimmed.split(/\r?\n/).findLast(line => line.trim().endsWith('.tgz'))?.trim()
+}
+
 try {
   mkdirSync(packed)
   mkdirSync(consumer)
-  runPnpm(['build'], { cwd: root, stdio: 'inherit' })
-  const output = runPnpm(['pack', '--pack-destination', packed], {
-    cwd: root,
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'inherit'],
-  })
-  const tarball = output.trim().split(/\r?\n/).findLast(line => line.trim().endsWith('.tgz'))?.trim()
-  if (!tarball) throw new Error(`pnpm pack did not report a tarball: ${output}`)
+  const output = process.platform === 'win32'
+    ? (runNpm(['run', 'build'], { cwd: root, stdio: 'inherit' }), runNpm(['pack', '--pack-destination', packed, '--json'], {
+        cwd: root,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'inherit'],
+      }))
+    : (runPnpm(['build'], { cwd: root, stdio: 'inherit' }), runPnpm(['pack', '--pack-destination', packed], {
+        cwd: root,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'inherit'],
+      }))
+  const tarball = packedFilename(output)
+  if (!tarball) throw new Error(`package manager did not report a tarball: ${output}`)
+  const tarballPath = resolve(packed, tarball)
 
   const requiredPeers = Object.fromEntries(
     Object.entries(manifest.peerDependencies).filter(([name]) => !manifest.peerDependenciesMeta?.[name]?.optional),
   )
   const dependencies = {
-    [manifest.name]: `file:${resolve(root, tarball)}`,
+    [manifest.name]: `file:${tarballPath}`,
     ...manifest.dependencies,
     ...requiredPeers,
   }
@@ -47,10 +62,11 @@ try {
     dependencies,
   }, null, 2))
 
-  runPnpm(['install', '--offline', '--ignore-scripts', '--frozen-lockfile=false'], {
-    cwd: consumer,
-    stdio: 'inherit',
-  })
+  if (process.platform === 'win32') {
+    runNpm(['install', '--ignore-scripts', '--no-package-lock'], { cwd: consumer, stdio: 'inherit' })
+  } else {
+    runPnpm(['install', '--offline', '--ignore-scripts', '--frozen-lockfile=false'], { cwd: consumer, stdio: 'inherit' })
+  }
   const imported = execFileSync(process.execPath, [
     '--input-type=module',
     '--eval',
