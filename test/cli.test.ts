@@ -106,7 +106,7 @@ describe('dshagent CLI', () => {
       expect(patch).not.toContain('pnpm test')
       expect(await readFile(join(files.presetRoot, 'dshagent', 'preset.yml'), 'utf8')).toContain('DSHAgent')
       expect(await readFile(join(files.presetRoot, 'reprofix', 'agent.cordis.yml'), 'utf8'))
-        .toContain(join(root, 'dist', 'index.js'))
+        .toContain(JSON.stringify(join(root, 'dist', 'index.js')))
       if (process.platform !== 'win32') {
         expect((await stat(files.contextPath)).mode & 0o777).toBe(0o600)
         expect((await stat(files.patchPath)).mode & 0o777).toBe(0o600)
