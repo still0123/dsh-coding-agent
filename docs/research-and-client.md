@@ -14,7 +14,7 @@ A Node standard-library loopback Web client is the smallest cross-platform clien
 - one code path for macOS, Windows, and Linux;
 - no Electron runtime, native bundler, code signing, updater, or new UI framework;
 - no Tauri/Rust toolchain or platform WebView variance;
-- the browser UI starts a dedicated `dsh --profile headless` process, so DSH remains the runtime and ReproFix remains the repair transaction;
+- the browser UI writes the submitted JSON to an owner-only temporary file and starts `dshagent repair --yes`, so it uses the same validation, fingerprint, Preset, and trusted-context path as the text CLI;
 - the server binds only to `127.0.0.1`, uses a random per-process token, accepts one run at a time, limits request bodies, launches with `shell: false`, and terminates the child on shutdown.
 
 The client is intentionally a launcher, not a queue, session store, credential manager, or replacement desktop runtime. Those features should be considered only after measured usage demonstrates a need.

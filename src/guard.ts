@@ -13,6 +13,12 @@ interface ActiveRun {
 
 const WRITABLE_STATES = new Set<RunState>(['reproduced', 'repairing'])
 export const DEFAULT_READONLY_TOOLS = ['read', 'glob', 'grep'] as const
+export const DEFAULT_WRITER_TOOLS = [
+  ...DEFAULT_READONLY_TOOLS,
+  'write',
+  'edit',
+  'structured_output',
+] as const
 
 export class InMemoryActiveRunRegistry implements ActiveRunRegistry {
   private readonly active = new Map<string, ActiveRun>()
@@ -57,11 +63,17 @@ export function installGuard(
   ctx: Context,
   registry: InMemoryActiveRunRegistry,
   readonlyTools: readonly string[] = DEFAULT_READONLY_TOOLS,
+  writerTools: readonly string[] = DEFAULT_WRITER_TOOLS,
 ): () => void {
   const allowed = new Set([...readonlyTools, 'repair_failure'])
+  const writerAllowed = new Set(writerTools)
   return ctx.tools.guard((exec) => {
     if (allowed.has(exec.name)) return undefined
-    if (exec.agent && mayUseWriterTools(exec.agent, registry)) return undefined
+    if (exec.agent && mayUseWriterTools(exec.agent, registry)) {
+      return writerAllowed.has(exec.name)
+        ? undefined
+        : `ReproFix writer denied tool "${exec.name}": commands are wrapper-owned`
+    }
     return `ReproFix gate denied tool "${exec.name}": exact reproduction is required for the current active run`
   })
 }

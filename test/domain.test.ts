@@ -9,6 +9,7 @@ import {
   isTerminalRunState,
   matchesFailure,
   matchesSuccess,
+  repairInputFingerprint,
   sha256Digest,
   stableCanonicalJson,
   summarizeCommandOutput,
@@ -170,6 +171,16 @@ describe('deterministic helpers', () => {
     expect(sha256Digest('abc')).toBe(
       'sha256:ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad',
     )
+  })
+
+  it('binds repair authorization to normalized commands and canonical workspace', () => {
+    const input = validateRepairFailureInput(validInput)
+    const original = repairInputFingerprint(input, '/repo')
+    expect(repairInputFingerprint(input, '/other')).not.toBe(original)
+    expect(repairInputFingerprint({
+      ...input,
+      repro: { ...input.repro, command: 'pnpm test --changed' },
+    }, '/repo')).not.toBe(original)
   })
 
   it('bounds each stream, hashes the captured combined output, and limits the tail', () => {

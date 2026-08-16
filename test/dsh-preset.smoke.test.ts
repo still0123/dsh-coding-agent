@@ -4,6 +4,7 @@ import Loader from '@deepseek-ai/cordis-plugin-loader'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { mountPreset } from '@deepseek-ai/dsh-agent-presets'
 import { CallId } from '@deepseek-ai/dsh-llm'
+import LlmRuntime from '@deepseek-ai/dsh-llm'
 import { createScope } from '@deepseek-ai/dsh-scope'
 import { SESSION_FORMAT_VERSION, Session, SessionId } from '@deepseek-ai/dsh-session'
 import ShellExecutor, { type ShellExecRequest, type ShellExecSpec, type ShellProcess, type ShellRunResult } from '@deepseek-ai/dsh-shell'
@@ -95,6 +96,7 @@ describe('real DSH ReproFix preset mount', () => {
     ctx.baseUrl = pathToFileURL(join(root, 'node_modules', '@deepseek-ai', 'dsh', 'package.json')).href
     await ctx.plugin(Loader)
     ctx.loader.builtins.group = Group
+    await ctx.plugin(LlmRuntime)
     await ctx.plugin(SystemPrompt, {})
     await ctx.plugin(ToolRuntime, { mode: 'native' })
     await ctx.plugin(SubagentRuntime)
@@ -159,6 +161,7 @@ describe('real DSHAgent coding preset mount', () => {
     ctx.baseUrl = pathToFileURL(join(root, 'node_modules', '@deepseek-ai', 'dsh', 'package.json')).href
     await ctx.plugin(Loader)
     ctx.loader.builtins.group = Group
+    await ctx.plugin(LlmRuntime)
     await ctx.plugin(SystemPrompt, {})
     await ctx.plugin(ToolRuntime, { mode: 'native' })
     await ctx.plugin(SubagentRuntime)

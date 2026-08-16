@@ -4,42 +4,30 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![DSH](https://img.shields.io/badge/DeepSeek%20Harness-0.1.0--rc.6-4e51e8)](https://github.com/deepseek-ai/deepseek-harness)
 
-**一个基于 DeepSeek Harness 的专用代码修复 Agent：只有在真实失败被精确复现后，
-才允许修改代码。**
+**一个基于 DeepSeek Harness / Cordis 的 Coding Agent 发行层，提供通用编码模式和
+严格的 ReproFix 修复模式。**
 
-ReproFix 解决的是常见的 AI 修复问题：模型看到一段报错后直接改代码，最后声称
-“已经修好”，但它可能没有复现原始问题，也没有运行完整验收。
+本项目不重写 DSH 的 Agent Loop、模型适配、Session、Sandbox 或持久化。它通过
+Agent Preset 组合 DSH 能力，并自主实现 ReproFix：只有当前机器上的真实失败被精确
+复现后，才允许唯一 writer 修改代码。
 
 ReproFix 把修复过程变成一个受控流程：
 
 ```text
-检查 Git 工作区干净
+获取 canonical Git root 的跨进程锁并检查 HEAD/clean
         ↓
-运行用户声明的复现命令
+运行用户在 CLI 边界确认的复现命令
         ↓
 退出码 + 失败文本精确匹配（RED）
         ↓
-临时开放一个 writer Agent 修改代码
+只向一个 writer 开放 read/search/edit/write（无 Shell）
         ↓
 插件重新运行复现命令和全部验收命令（GREEN）
         ↓
-确认验证前后的补丁指纹没有变化
+确认 HEAD 和验证前后的补丁指纹没有变化
         ↓
 写入可审计的 Session Receipt
 ```
-
-ReproFix 是专用 Coding Agent，不是通用 Coding Agent，也不重复实现底层 Agent
-Runtime。它由三部分组成：
-
-```text
-ReproFix Agent
-├── Agent Preset：定义角色、工具和工作模式
-├── ReproFix Plugin：实现 RED Gate、修复流程和 Receipt
-└── DSH Runtime：提供 Agent Loop、Session、Shell、Sandbox 和 Workflow
-```
-
-用户实际运行的是 ReproFix Agent；Plugin 是该 Agent 在 DSH 中实现专用修复能力的
-内部组件。
 
 > [!IMPORTANT]
 > 当前版本为 `0.1.0`，仅支持从源码运行，尚未发布到 npm 或 GitHub Releases。
@@ -53,8 +41,9 @@ ReproFix Agent
 | `DSHAgent` | 通用编码任务 | 文件与 Shell、搜索、Skills、Todo、提问和上下文压缩 |
 | `ReproFix` | 已有稳定复现方式的故障修复 | 精确 RED Gate、单 writer、独立验收和 Receipt |
 
-`DSHAgent` 不挂载 ReproFix Guard，可以正常修改代码；`ReproFix` 在精确复现前会锁定
-写文件与 Shell 工具。
+`DSHAgent` 不挂载 ReproFix Guard；`ReproFix` 在 RED 前拒绝写入，RED 后 writer 的
+能力工具也只有 read/search/edit/write（另放行 DSH 的结构化结果终结通道）。所有
+命令始终由 wrapper 执行。
 
 ## ReproFix Agent 如何工作
 
@@ -70,7 +59,7 @@ repair_failure
 2. 拒绝包含 tracked 或 untracked 改动的工作区。
 3. 运行 `repro.command`。
 4. 同时校验退出码和所有大小写敏感的 `outputIncludes` 文本。
-5. 只有匹配成功才开放写文件和 Shell 工具。
+5. 只有匹配成功才向唯一 writer 开放 edit/write，始终不开放 Shell。
 6. 启动最多一个 writer Agent 诊断并修改代码。
 7. 由插件重新运行复现命令和最多 10 条验收命令。
 8. 比较验证前后的 Git 补丁指纹，防止测试过程继续改动补丁。
@@ -103,10 +92,13 @@ repair_failure
 - DSH `0.1.0-rc.6`
 - 已配置可用模型的 DSH 环境
 
-## 快速体验：本地客户端
+CLI 使用 DSH 的 `headless` Profile。若默认模型来自 Web Profile 单独安装的第三方
+provider，必须把同一 adapter 配置到
+`$DSH_HOME/profiles/headless/cordis.patch.yml`；CLI 不会把 Web 插件隐式复制到
+headless。缺少 adapter 时，`run` 明确失败，ReproFix 在 RED 后返回带 Receipt 的
+`infrastructure_error`。
 
-这是目前最简单的运行方式。客户端会在本机启动一个只监听 `127.0.0.1` 的页面，
-每次提交启动一个独立的 DSH headless 进程。
+## 快速开始：文本 CLI
 
 ```bash
 git clone https://github.com/still0123/dsh-coding-agent.git
@@ -116,37 +108,34 @@ npm install -g pnpm@11.7.0
 pnpm install --frozen-lockfile --ignore-scripts
 pnpm build
 
-# 使用环境变量或 DSH 凭据文件配置模型
-export DEEPSEEK_API_KEY="your-key"
-
-pnpm client
+pnpm dshagent run "检查当前仓库并修复类型错误" --cwd .
+pnpm dshagent repair --spec repair.json --cwd .
 ```
 
-Windows PowerShell：
-
-```powershell
-git clone https://github.com/still0123/dsh-coding-agent.git
-cd dsh-coding-agent
-
-npm install -g pnpm@11.7.0
-pnpm install --frozen-lockfile --ignore-scripts
-pnpm build
-
-$env:DEEPSEEK_API_KEY = "your-key"
-pnpm client
-```
-
-启动后浏览器会自动打开本地页面。页面需要两个输入：
-
-- **Git workspace**：待修复仓库的绝对路径。
-- **repair_failure JSON**：任务、复现规则和验收命令。
-
-可选参数：
+`repair` 会先校验并展示 canonical 工作区、复现命令、失败特征和验收命令。人工确认
+后，CLI 对规范化输入和工作区计算 fingerprint，再通过 `0600` 临时上下文直接调用
+`repair_failure`；这些命令不会进入模型 Prompt。CI 等非交互环境必须显式使用
+`--yes`：
 
 ```bash
-pnpm exec dshagent-client --no-open
-pnpm exec dshagent-client --port 4317
+pnpm dshagent repair --spec repair.json --cwd . --yes --timeout 900000
 ```
+
+V0.1 CLI 为单次文本模式：创建新 Session，只输出最终文本，不提供 JSONL、Session
+ID 或 resume；这些能力计划在 V0.2 加入。
+
+## 一键 Demo
+
+每个 Demo 都会把 `fixtures/buggy-project` 复制到新的临时 Git 仓库，并断言最终状态：
+
+```bash
+pnpm demo:not-reproduced
+pnpm demo:fixed
+pnpm demo:validation-failed
+```
+
+`fixed` 和 `validation-failed` 会调用已配置的模型；`not-reproduced` 在 RED gate
+直接结束，不产生模型修复轮次。脚本会打印临时工作区路径，便于检查最终 diff。
 
 ## 安装到已有 DSH Web
 
@@ -246,10 +235,11 @@ Preset，不能全局限制其他 DSH Agent。
 | `not_reproduced` | 当前命令结果没有匹配声明的失败特征，没有启动 writer |
 | `blocked_dirty_workspace` | 启动时工作区不干净，没有运行复现命令 |
 | `blocked_repro_side_effect` | 复现后工作区发生变化，没有启动 writer |
-| `blocked_active_run` | 当前 Session 已经有一个 ReproFix 任务 |
+| `blocked_active_run` | 共享同一 `DSH_HOME` 的进程中已有任务锁定该 canonical Git root |
 | `repair_failed` | writer 没有产出可验证补丁或 Workflow 失败 |
-| `validation_failed` | 已有补丁，但复现、验收或补丁指纹检查失败 |
+| `validation_failed` | 已有补丁，但复现、验收、HEAD 或补丁指纹检查失败 |
 | `cancelled` | 外部取消或命令执行被中止 |
+| `infrastructure_error` | Git、锁目录、Session 等本地基础设施阻止事务完成 |
 
 只有 `fixed` 会返回 `ok: true`。
 
@@ -261,10 +251,15 @@ Preset，不能全局限制其他 DSH Agent。
 - 截断、超时、取消、Sandbox 拒绝或未启动的命令不能成为 RED/GREEN。
 - RED 必须同时满足退出码规则和全部文本规则。
 - RED 之前，`write`、`edit`、`bash`、`pwsh` 及未知工具均被 Guard 拒绝。
+- RED 之后，writer 的能力工具也只有 `read`、`glob`、`grep`、`edit`、`write`
+  （另放行 DSH 的 `structured_output` 结果通道），不能使用 `bash`、`pwsh` 或任意
+  命令工具。
+- canonical Git root 通过 `$DSH_HOME/dsh-coding-agent/locks` 在进程间互斥。
+- reproduction、writer 和 validation 后都会核验 HEAD 未变化。
 - GREEN 由插件重新运行，不采信 writer 声称“测试已通过”。
 - tracked diff 与 untracked 文件共同进入版本化补丁指纹。
 - 最终验证改变补丁时，任务不能返回 `fixed`。
-- 每个终态都会写入 `reprofix/receipt`，包括失败和取消。
+- 每个受控终态都会尝试写入 `reprofix/receipt`；持久化失败会输出到 stderr。
 
 命令输出每个流最多保留 256 KiB。任何截断都会导致匹配失败，而不是用不完整输出
 推断成功。
@@ -277,11 +272,13 @@ ReproFix 限制了 writer 的启动时机，但它不是完整的命令隔离系
   你信任的命令。
 - 复现命令先执行，插件随后检查工作区是否变化。如果该命令修改或删除文件，插件会
   返回 `blocked_repro_side_effect`，但当前版本不会自动恢复这些改动。
-- 活跃任务锁目前按 Session 生效，不是按 Git 工作区全局生效。不要让多个 Session
-  同时修复同一个仓库。
-- writer 被明确提示不要执行 commit、push、reset、checkout 或 clean，但当前版本尚未
-  对所有此类 Shell 命令做机械拦截。
+- 工作区锁只覆盖共享同一 `DSH_HOME` 的进程；不同用户、不同 `DSH_HOME` 和网络文件
+  系统不在 V0.1 保证范围内。
+- writer 没有 Shell，因此不能执行 commit、push、reset、checkout、clean 或自行
+  重写验收命令。
 - Git ignored 文件、仓库外文件、网络请求和远端副作用不在补丁指纹内。
+- reproduction/acceptance 仍在当前工作区原地执行；检测到副作用会停止，但不会自动
+  恢复已产生的修改。隔离 worktree/container 属于 V0.2。
 - Receipt 保存命令文本。不要把 Token、密码或其他秘密直接写入命令。
 
 建议先在临时分支、临时 worktree 或可丢弃仓库中使用，并在运行后检查 `git diff`
@@ -314,12 +311,15 @@ added + deleted + 10 × changed files + 50 × manifest files + 100 × binary fil
 | --- | --- |
 | `src/index.ts` | 注册 `repair_failure` 工具及输入/输出 Schema |
 | `src/repair.ts` | RED、writer、GREEN 和终态编排 |
-| `src/guard.ts` | 在 RED 前锁定写入与 Shell 工具 |
-| `src/runner.ts` | DSH Shell 调用、Git clean 检查和补丁指纹 |
+| `src/guard.ts` | RED gate 与 writer 工具 allowlist |
+| `src/runner.ts` | DSH Shell 调用、canonical Git/HEAD 和补丁指纹 |
+| `src/workspace-lock.ts` | canonical root 的跨进程 owner lock |
+| `src/cli-runner.ts` | 可信上下文驱动的 DSH run/repair 执行器 |
 | `src/workflow.ts` | 单 writer Workflow 与结构化诊断结果 |
 | `src/receipt.ts` | Receipt 指纹与 Markdown 展示 |
+| `client/cli.mjs` | `dshagent` 参数、确认、timeout 与 DSH 子进程管理 |
 | `client/server.mjs` | 仅本机访问的跨平台启动页面 |
-| `preset/reprofix` | ReproFix Agent Preset |
+| `preset/coding` / `preset/reprofix` | 两套 Agent Preset |
 | `test` | 单元、集成、Preset、客户端和真实 Git fixture 测试 |
 
 ## 开发与验证
@@ -334,7 +334,8 @@ pnpm test:preset-smoke
 pnpm pack:check
 ```
 
-CI 还会在 macOS 和 Windows 上单独运行客户端测试与打包检查。
+CI 还会在 macOS 和 Windows 上单独运行 CLI/客户端测试与打包检查。架构与 DSH
+所有权边界见 [Architecture](docs/architecture.md)。
 
 ## 兼容性
 

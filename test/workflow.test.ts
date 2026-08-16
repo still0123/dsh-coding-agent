@@ -40,6 +40,8 @@ describe('writer workflow lifecycle', () => {
     expect(dispose).toHaveBeenCalledTimes(1)
     const request = start.mock.calls[0]![0]
     expect(request.script).not.toContain('fix the failure')
+    expect(request.script).toContain('You have no command tool')
+    expect(request.script).not.toContain('supporting checks')
     expect(request.args.task).toBe('fix the failure')
     expect(request.maxTotalAgents).toBe(1)
   })
@@ -59,6 +61,75 @@ describe('writer workflow lifecycle', () => {
       expect(result.error).toBeDefined()
       expect(dispose).toHaveBeenCalledTimes(1)
     }
+  })
+
+  it('does not start a workflow for an already-aborted caller', async () => {
+    const controller = new AbortController()
+    controller.abort('stop')
+    const start = vi.fn()
+
+    await expect(runWriterWorkflow(input({ workflowEngine: { start } }, controller.signal))).resolves.toEqual({
+      stopReason: 'cancelled',
+      agentsStarted: 0,
+    })
+    expect(start).not.toHaveBeenCalled()
+  })
+
+  it('forwards an abort that races with workflow start exactly once', async () => {
+    const controller = new AbortController()
+    const cancel = vi.fn()
+    const dispose = vi.fn(async () => undefined)
+    const start = vi.fn(() => {
+      controller.abort('stop')
+      return {
+        result: Promise.resolve({ stopReason: 'cancelled', agentsStarted: 0, value: null }),
+        cancel,
+        dispose,
+      }
+    })
+
+    const result = await runWriterWorkflow(input({ workflowEngine: { start } }, controller.signal))
+    expect(result.stopReason).toBe('cancelled')
+    expect(cancel).toHaveBeenCalledTimes(1)
+    expect(dispose).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports a disposal failure after an otherwise completed workflow', async () => {
+    const disposalError = new Error('dispose failed')
+    const dispose = vi.fn(async () => { throw disposalError })
+    const start = vi.fn(() => ({
+      result: Promise.resolve({
+        stopReason: 'completed',
+        agentsStarted: 1,
+        value: { outcome: 'patched', diagnosis: 'off by one', evidence: [], residualRisks: [] },
+      }),
+      cancel: vi.fn(),
+      dispose,
+    }))
+
+    await expect(runWriterWorkflow(input({ workflowEngine: { start } }))).rejects.toBe(disposalError)
+    expect(dispose).toHaveBeenCalledTimes(1)
+  })
+
+  it('preserves workflow and disposal failures together', async () => {
+    const workflowError = new Error('workflow result failed')
+    const disposalError = new Error('dispose failed')
+    const dispose = vi.fn(async () => { throw disposalError })
+    const start = vi.fn(() => ({
+      result: Promise.reject(workflowError),
+      cancel: vi.fn(),
+      dispose,
+    }))
+
+    let failure: unknown
+    try {
+      await runWriterWorkflow(input({ workflowEngine: { start } }))
+    } catch (error) {
+      failure = error
+    }
+    expect(failure).toBeInstanceOf(AggregateError)
+    expect((failure as AggregateError).errors).toEqual([workflowError, disposalError])
+    expect(dispose).toHaveBeenCalledTimes(1)
   })
 
   it('bridges caller cancellation and disposes', async () => {

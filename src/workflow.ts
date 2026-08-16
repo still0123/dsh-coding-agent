@@ -31,8 +31,7 @@ export const REPAIR_WORKFLOW_SCRIPT = String.raw`const prompt = [
   'You are the single ReproFix writer. The wrapper has reproduced the declared failure for this run.',
   'Inspect the evidence, form a root-cause hypothesis, then make only the smallest patch needed.',
   'Avoid unrelated refactors, formatting, dependency upgrades, and public API changes.',
-  'You may run supporting checks, but the wrapper independently owns final verification.',
-  'Do not commit, push, reset, checkout, clean, or delete user data.',
+  'You have no command tool. Use only read, search, edit, and write, then return through the required structured output channel; the wrapper owns every check.',
   'Task: ' + args.task,
   'Reproduction evidence: ' + JSON.stringify(args.reproduction),
   args.previousValidation ? 'Previous validation failure: ' + JSON.stringify(args.previousValidation) : '',
@@ -89,6 +88,8 @@ export async function runWriterWorkflow(input: {
   previousValidation?: CommandEvidence[]
   patch?: PatchSummary
 }): Promise<WorkflowAttempt> {
+  if (input.signal.aborted) return { stopReason: 'cancelled', agentsStarted: 0 }
+
   const run = input.ctx.workflowEngine.start({
     script: REPAIR_WORKFLOW_SCRIPT,
     meta: WORKFLOW_META,
@@ -104,8 +105,17 @@ export async function runWriterWorkflow(input: {
     maxTotalAgents: 1,
   })
 
-  const onAbort = (): void => { run.cancel('repair_failure aborted') }
+  let abortForwarded = false
+  const onAbort = (): void => {
+    if (abortForwarded) return
+    abortForwarded = true
+    try {
+      run.cancel('repair_failure aborted')
+    } catch {}
+  }
   input.signal.addEventListener('abort', onAbort, { once: true })
+  if (input.signal.aborted) onAbort()
+  let runFailure: unknown
   try {
     const result = await run.result
     const base: WorkflowAttempt = {
@@ -116,9 +126,19 @@ export async function runWriterWorkflow(input: {
     if (result.stopReason !== 'completed') return base
     if (!isWriterResult(result.value)) return { ...base, error: 'workflow returned invalid writer output' }
     return { ...base, writer: result.value }
+  } catch (error) {
+    runFailure = error
+    throw error
   } finally {
     input.signal.removeEventListener('abort', onAbort)
-    await run.dispose()
+    try {
+      await run.dispose()
+    } catch (disposeError) {
+      if (runFailure !== undefined) {
+        throw new AggregateError([runFailure, disposeError], 'workflow execution and disposal failed')
+      }
+      throw disposeError
+    }
   }
 }
 

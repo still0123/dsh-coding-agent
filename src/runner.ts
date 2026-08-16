@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { createReadStream } from 'node:fs'
-import { lstat, readlink } from 'node:fs/promises'
+import { lstat, readlink, realpath } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-shell'
@@ -199,10 +199,14 @@ export function createGitAdapter(ctx: Context): GitAdapter {
   const runner = createCommandRunner(ctx)
   return {
     async baseline(cwd): Promise<BaselineEvidence> {
-      const workspaceRoot = (await gitText(runner, cwd, 'git rev-parse --show-toplevel')).trim()
+      const workspaceRoot = await realpath((await gitText(runner, cwd, 'git rev-parse --show-toplevel')).trim())
       const head = (await gitText(runner, workspaceRoot, 'git rev-parse HEAD')).trim()
       const status = await gitText(runner, workspaceRoot, 'git status --porcelain=v1 -z --untracked-files=all')
       return { workspaceRoot, head, clean: status.length === 0 }
+    },
+
+    async head(workspaceRoot): Promise<string> {
+      return (await gitText(runner, workspaceRoot, 'git rev-parse HEAD')).trim()
     },
 
     async isClean(workspaceRoot): Promise<boolean> {

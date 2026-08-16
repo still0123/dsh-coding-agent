@@ -5,13 +5,11 @@ import { SessionId } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { EventEmitter } from 'node:events'
-import { mkdir, mkdtemp, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import { request as createHttpRequest, createServer as createHttpServer } from 'node:http'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
-import { buildPrompt, createLocalClient, createShutdownHandler, dshLaunch, openBrowser, validHost, waitForSettlement } from '../client/server.mjs'
+import { createLocalClient, createShutdownHandler, dshLaunch, forwardChildOutput, openBrowser, validHost, waitForSettlement } from '../client/server.mjs'
 import { apply as applyClientScope, mountReproFix } from '../src/client-scope.js'
 
 class FakeChild extends EventEmitter {
@@ -73,14 +71,6 @@ describe('local client', () => {
     expect(scoped.tools.register.mock.calls[0]?.[0]).toMatchObject({ name: 'repair_failure' })
   })
 
-  it('builds a constrained prompt without shell interpolation', () => {
-    const input = { task: 'fix "quoted"', repro: { command: 'echo $TOKEN', failure: { outputIncludes: ['x'] } } }
-    const prompt = buildPrompt(input)
-    expect(prompt).toContain('Use the repair_failure tool exactly once')
-    expect(prompt).toContain(JSON.stringify(input))
-    expect(prompt).toContain('Do not edit files or run shell commands outside that tool')
-  })
-
   it('accepts only the numeric loopback Host', () => {
     expect(validHost('127.0.0.1:4317')).toBe(true)
     expect(validHost('localhost:4317')).toBe(false)
@@ -102,6 +92,70 @@ describe('local client', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('pauses child output on HTTP backpressure and resumes on drain', () => {
+    const stdout = new EventEmitter() as EventEmitter & {
+      pause: ReturnType<typeof vi.fn>
+      resume: ReturnType<typeof vi.fn>
+    }
+    const stderr = new EventEmitter() as EventEmitter & {
+      pause: ReturnType<typeof vi.fn>
+      resume: ReturnType<typeof vi.fn>
+    }
+    stdout.pause = vi.fn()
+    stdout.resume = vi.fn()
+    stderr.pause = vi.fn()
+    stderr.resume = vi.fn()
+    const response = new EventEmitter() as EventEmitter & {
+      destroyed: boolean
+      writableEnded: boolean
+      write: ReturnType<typeof vi.fn>
+      destroy: ReturnType<typeof vi.fn>
+    }
+    response.destroyed = false
+    response.writableEnded = false
+    response.write = vi.fn().mockReturnValueOnce(false).mockReturnValue(true)
+    response.destroy = vi.fn()
+
+    const cleanup = forwardChildOutput([stdout, stderr], response)
+    stdout.emit('data', Buffer.from('first'))
+    expect(stdout.pause).toHaveBeenCalledTimes(1)
+    expect(stderr.pause).toHaveBeenCalledTimes(1)
+    response.emit('drain')
+    expect(stdout.resume).toHaveBeenCalledTimes(1)
+    expect(stderr.resume).toHaveBeenCalledTimes(1)
+    stderr.emit('data', Buffer.from('second'))
+    expect(response.write).toHaveBeenLastCalledWith(Buffer.from('second'))
+    cleanup()
+    expect(stdout.listenerCount('data')).toBe(0)
+    expect(stderr.listenerCount('data')).toBe(0)
+  })
+
+  it('detaches output listeners and keeps pipes draining after disconnect', () => {
+    const stdout = new PassThrough()
+    const stderr = new PassThrough()
+    const stdoutResume = vi.spyOn(stdout, 'resume')
+    const stderrResume = vi.spyOn(stderr, 'resume')
+    const response = new EventEmitter() as EventEmitter & {
+      destroyed: boolean
+      writableEnded: boolean
+      write: ReturnType<typeof vi.fn>
+      destroy: ReturnType<typeof vi.fn>
+    }
+    response.destroyed = false
+    response.writableEnded = false
+    response.write = vi.fn(() => true)
+    response.destroy = vi.fn()
+
+    forwardChildOutput([stdout, stderr], response)
+    response.emit('close')
+    expect(stdout.listenerCount('data')).toBe(0)
+    expect(stderr.listenerCount('data')).toBe(0)
+    expect(stdoutResume).toHaveBeenCalled()
+    expect(stderrResume).toHaveBeenCalled()
+    stdout.destroy()
+    stderr.destroy()
   })
 
   it('shares concurrent signal shutdown work', async () => {
@@ -177,31 +231,8 @@ describe('local client', () => {
     expect(child.listenerCount('spawn')).toBe(0)
   })
 
-  it('removes its generated patch when Windows launch discovery fails', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'reprofix-client-init-'))
-    const prefix = `dshagent-client-${process.pid}-`
-    const before = (await readdir(tmpdir())).filter(name => name.startsWith(prefix)).sort()
-    const configuredEntry = process.env.DSH_NODE_ENTRY
-    try {
-      await mkdir(join(root, 'dist'), { recursive: true })
-      await writeFile(join(root, 'dist', 'client-scope.js'), 'export {}\n')
-      await writeFile(join(root, 'package.json'), '{"name":"isolated-client-test"}\n')
-      delete process.env.DSH_NODE_ENTRY
-      await expect(createLocalClient({ packageRoot: root, platform: 'win32' })).rejects.toThrow()
-      const after = (await readdir(tmpdir())).filter(name => name.startsWith(prefix)).sort()
-      expect(after).toEqual(before)
-    } finally {
-      if (configuredEntry === undefined) delete process.env.DSH_NODE_ENTRY
-      else process.env.DSH_NODE_ENTRY = configuredEntry
-      await rm(root, { recursive: true, force: true })
-    }
-  })
-
-  it('removes its generated patch when the requested port is unavailable', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'reprofix-client-listen-'))
+  it('closes cleanly when the requested port is unavailable', async () => {
     const occupied = createHttpServer()
-    await mkdir(join(root, 'dist'), { recursive: true })
-    await writeFile(join(root, 'dist', 'client-scope.js'), 'export {}\n')
     await new Promise<void>((resolvePromise, reject) => {
       occupied.once('error', reject)
       occupied.listen(0, '127.0.0.1', resolvePromise)
@@ -209,27 +240,22 @@ describe('local client', () => {
     const address = occupied.address()
     if (!address || typeof address === 'string') throw new Error('test server did not bind')
     const client = await createLocalClient({
-      packageRoot: root,
-      launch: { command: process.execPath, prefixArgs: ['/opt/dsh/lib/bin.js'] },
+      launch: { command: process.execPath, prefixArgs: ['/opt/dshagent/cli.mjs'] },
     })
     try {
-      await stat(client.patch)
       await expect(client.listen(address.port)).rejects.toMatchObject({ code: 'EADDRINUSE' })
-      await expect(stat(client.patch)).rejects.toMatchObject({ code: 'ENOENT' })
       await expect(client.close()).resolves.toBeUndefined()
     } finally {
       await new Promise<void>((resolvePromise, reject) => occupied.close(error => error ? reject(error) : resolvePromise()))
-      await rm(root, { recursive: true, force: true })
     }
   })
 
-  it('binds locally, requires its token, and spawns DSH without a shell', async () => {
+  it('binds locally, requires its token, and spawns the trusted CLI without a shell', async () => {
     const child = new FakeChild()
     const spawnProcess = vi.fn(() => child as never)
     const client = await createLocalClient({
       token: 'test-token',
-      patch: '/tmp/reprofix-test.yml',
-      launch: { command: process.execPath, prefixArgs: ['/opt/dsh/lib/bin.js'] },
+      launch: { command: process.execPath, prefixArgs: ['/opt/dshagent/cli.mjs'] },
       spawnProcess,
     })
     const url = await client.listen()
@@ -251,10 +277,12 @@ describe('local client', () => {
       await vi.waitFor(() => expect(spawnProcess).toHaveBeenCalledTimes(1))
       const [command, args, options] = spawnProcess.mock.calls[0]!
       expect(command).toBe(process.execPath)
-      expect(args.slice(0, 5)).toEqual(['/opt/dsh/lib/bin.js', '--profile', 'headless', '--patch', '/tmp/reprofix-test.yml'])
-      expect(args.at(-1)).toContain(JSON.stringify(input))
+      expect(args[0]).toBe('/opt/dshagent/cli.mjs')
+      expect(args.slice(1, 3)).toEqual(['repair', '--spec'])
+      expect(args.slice(4)).toEqual(['--cwd', process.cwd(), '--yes'])
+      expect(JSON.parse(await readFile(args[3], 'utf8'))).toEqual(input)
+      expect(args.join(' ')).not.toContain('pnpm test')
       expect(options).toMatchObject({ cwd: process.cwd(), shell: false, windowsHide: true })
-      expect(options.env.DSH_TOOLS_MODE).toBe('native')
 
       child.stdout.write('agent output\n')
       child.stdout.end()
@@ -263,6 +291,7 @@ describe('local client', () => {
       const response = await run
       expect(response.status).toBe(200)
       expect(await response.text()).toContain('agent output')
+      await expect(stat(args[3])).rejects.toMatchObject({ code: 'ENOENT' })
     } finally {
       await client.close()
     }
@@ -273,8 +302,7 @@ describe('local client', () => {
     const spawnProcess = vi.fn(() => child as never)
     const client = await createLocalClient({
       token: 'test-token',
-      patch: '/tmp/reprofix-test.yml',
-      launch: { command: process.execPath, prefixArgs: ['/opt/dsh/lib/bin.js'] },
+      launch: { command: process.execPath, prefixArgs: ['/opt/dshagent/cli.mjs'] },
       spawnProcess,
     })
     const url = await client.listen()
@@ -295,8 +323,7 @@ describe('local client', () => {
     const spawnProcess = vi.fn()
     const client = await createLocalClient({
       token: 'test-token',
-      patch: '/tmp/reprofix-test.yml',
-      launch: { command: process.execPath, prefixArgs: ['/opt/dsh/lib/bin.js'] },
+      launch: { command: process.execPath, prefixArgs: ['/opt/dshagent/cli.mjs'] },
       shutdownTimeoutMs: 50,
       spawnProcess,
     })
@@ -341,8 +368,7 @@ describe('local client', () => {
       .mockReturnValueOnce(secondChild as never)
     const client = await createLocalClient({
       token: 'test-token',
-      patch: '/tmp/reprofix-test.yml',
-      launch: { command: process.execPath, prefixArgs: ['/opt/dsh/lib/bin.js'] },
+      launch: { command: process.execPath, prefixArgs: ['/opt/dshagent/cli.mjs'] },
       shutdownTimeoutMs: 5,
       spawnProcess,
     })
@@ -379,8 +405,7 @@ describe('local client', () => {
     const spawnProcess = vi.fn(() => child as never)
     const client = await createLocalClient({
       token: 'test-token',
-      patch: '/tmp/reprofix-test.yml',
-      launch: { command: process.execPath, prefixArgs: ['/opt/dsh/lib/bin.js'] },
+      launch: { command: process.execPath, prefixArgs: ['/opt/dshagent/cli.mjs'] },
       shutdownTimeoutMs: 5,
       spawnProcess,
     })
@@ -402,8 +427,7 @@ describe('local client', () => {
     const spawnProcess = vi.fn(() => child as never)
     const client = await createLocalClient({
       token: 'test-token',
-      patch: '/tmp/reprofix-test.yml',
-      launch: { command: process.execPath, prefixArgs: ['/opt/dsh/lib/bin.js'] },
+      launch: { command: process.execPath, prefixArgs: ['/opt/dshagent/cli.mjs'] },
       spawnProcess,
     })
     const url = await client.listen()
@@ -424,8 +448,7 @@ describe('local client', () => {
     const spawnProcess = vi.fn(() => { throw new Error('spawn exploded') })
     const client = await createLocalClient({
       token: 'test-token',
-      patch: '/tmp/reprofix-test.yml',
-      launch: { command: process.execPath, prefixArgs: ['/opt/dsh/lib/bin.js'] },
+      launch: { command: process.execPath, prefixArgs: ['/opt/dshagent/cli.mjs'] },
       spawnProcess,
     })
     const url = await client.listen()
@@ -440,12 +463,58 @@ describe('local client', () => {
     }
   })
 
+  it('times out a stalled body without blocking a normal run', async () => {
+    const child = new FakeChild()
+    const spawnProcess = vi.fn(() => child as never)
+    const client = await createLocalClient({
+      token: 'test-token',
+      launch: { command: process.execPath, prefixArgs: ['/opt/dshagent/cli.mjs'] },
+      requestBodyTimeoutMs: 25,
+      spawnProcess,
+    })
+    const url = await client.listen()
+    const requestSeen = new Promise(resolvePromise => client.server.once('request', resolvePromise))
+    const stalled = createHttpRequest(new URL('/api/run', url), {
+      method: 'POST',
+      headers: {
+        'content-length': '4096',
+        'content-type': 'application/json',
+        'x-reprofix-token': 'test-token',
+      },
+    })
+    const stalledResponse = new Promise<{ status: number | undefined; body: string }>((resolvePromise, reject) => {
+      stalled.once('error', reject)
+      stalled.once('response', response => {
+        const chunks: Buffer[] = []
+        response.on('data', chunk => chunks.push(Buffer.from(chunk)))
+        response.once('end', () => resolvePromise({
+          status: response.statusCode,
+          body: Buffer.concat(chunks).toString('utf8'),
+        }))
+      })
+    })
+    stalled.write('{"cwd":"')
+    await requestSeen
+
+    const input = { task: 'Fix the bug.', repro: { command: 'pnpm test', failure: { outputIncludes: ['failure'] } } }
+    const normalRun = post(url, 'test-token', { cwd: process.cwd(), input })
+    await vi.waitFor(() => expect(spawnProcess).toHaveBeenCalledTimes(1))
+    child.exitCode = 0
+    child.emit('close', 0)
+    expect((await normalRun).status).toBe(200)
+    await expect(stalledResponse).resolves.toMatchObject({
+      status: 408,
+      body: expect.stringContaining('request body timed out'),
+    })
+    stalled.destroy()
+    await client.close()
+  })
+
   it('rejects relative workspaces and oversized requests before spawning', async () => {
     const spawnProcess = vi.fn()
     const client = await createLocalClient({
       token: 'test-token',
-      patch: '/tmp/reprofix-test.yml',
-      launch: { command: process.execPath, prefixArgs: ['/opt/dsh/lib/bin.js'] },
+      launch: { command: process.execPath, prefixArgs: ['/opt/dshagent/cli.mjs'] },
       spawnProcess,
     })
     const url = await client.listen()
@@ -462,7 +531,7 @@ describe('local client', () => {
         headers: { 'content-type': 'application/json', 'x-reprofix-token': 'test-token' },
         body: JSON.stringify({ cwd: process.cwd(), input: { task: 'x'.repeat(70_000), repro: {} } }),
       })
-      expect(oversized.status).toBe(400)
+      expect(oversized.status).toBe(413)
       expect(spawnProcess).not.toHaveBeenCalled()
     } finally {
       await client.close()

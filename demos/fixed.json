@@ -1,0 +1,14 @@
+{
+  "task": "Fix add() with the smallest possible source change. Do not change the test or public API.",
+  "repro": {
+    "command": "node --experimental-strip-types --test test/add.test.ts",
+    "failure": {
+      "exitCodes": [1],
+      "outputIncludes": ["expected 4, received 3"]
+    },
+    "success": {
+      "exitCodes": [0]
+    }
+  },
+  "maxRepairRounds": 1
+}

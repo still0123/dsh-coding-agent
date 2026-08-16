@@ -1,0 +1,11 @@
+{
+  "task": "Do not edit unless the declared failure is reproduced.",
+  "repro": {
+    "command": "node --experimental-strip-types --test test/add.test.ts",
+    "failure": {
+      "exitCodes": [1],
+      "outputIncludes": ["a signature that is not present"]
+    }
+  },
+  "maxRepairRounds": 1
+}

@@ -20,6 +20,7 @@ interface ReprofixReceiptV1 {
     | 'repair_failed'
     | 'validation_failed'
     | 'cancelled'
+    | 'infrastructure_error'
   startedAt: string
   finishedAt: string
   inputFingerprint: `sha256:${string}`
@@ -47,9 +48,11 @@ interface ReprofixReceiptV1 {
 ```
 
 `ok` is a tool-result projection and is true exactly when `status === 'fixed'`.
-Every terminal status produces a receipt, including cancellation and blocked
-runs. `failureLog` is never stored verbatim; only its digest contributes to the
-input evidence.
+Every controlled terminal status attempts a receipt, including cancellation,
+blocked runs, and `infrastructure_error`. A Session persistence failure is
+reported to stderr; an uncontrolled crash, `SIGKILL`, or power loss may prevent
+the write. `failureLog` is never stored verbatim; only its digest contributes
+to the input evidence.
 
 ## Command evidence
 
@@ -125,14 +128,18 @@ minimality.
 ## Canonicalization and privacy
 
 Fingerprint inputs use recursively sorted object keys, original array order,
-UTF-8 JSON, and SHA-256 with the `sha256:` prefix. Session payloads contain only
-lossless JSON: no `Error`, `AbortSignal`, agent, service, or function values.
-Commands are retained for auditability, so users must not put credentials in a
-command string. Environment variables and secret files are not collected.
+UTF-8 JSON, and SHA-256 with the `sha256:` prefix. The input fingerprint binds
+the normalized reproduction command, failure literals, acceptance commands,
+timeouts, and canonical Git root. Session payloads contain only lossless JSON:
+no `Error`, `AbortSignal`, agent, service, or function values. Commands are
+retained for auditability, so users must not put credentials in a command
+string. Environment variables and secret files are not collected.
 
 ## State events
 
 Each transition is also appended as `reprofix/run-state`, keyed by `runId`.
-Durable events determine whether the current run reached exact RED; the in-memory
-registry only prevents concurrent live runs. Terminal states relock the guard,
-and a stale pre-restart state never unlocks mutation.
+Durable events determine whether the current run reached exact RED. A
+canonical-root lock under `$DSH_HOME/dsh-coding-agent/locks` prevents concurrent
+runs across processes sharing that home; the in-memory registry only mirrors
+per-Agent state for the guard. Terminal states relock the guard, and a stale
+pre-restart state never unlocks mutation.

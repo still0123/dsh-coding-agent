@@ -3,7 +3,7 @@ import { SESSION_FORMAT_VERSION, Session, SessionId } from '@deepseek-ai/dsh-ses
 import { describe, expect, it, vi } from 'vitest'
 import { validateRepairFailureInput, type CommandEvidence, type PatchSummary } from '../src/domain.js'
 import { InMemoryActiveRunRegistry } from '../src/guard.js'
-import { executeRepairFailure, type CommandRunner, type GitAdapter } from '../src/repair.js'
+import { executeRepairFailure, type CommandRunner, type GitAdapter, type RepairDependencies } from '../src/repair.js'
 import type { WriterResult } from '../src/workflow.js'
 import type {} from '../src/session.js'
 
@@ -74,10 +74,14 @@ function args(maxRepairRounds = 1) {
 function dependencies(options: {
   clean?: boolean
   commands?: CommandEvidence[]
+  heads?: string[]
   patches?: PatchSummary[]
+  prepareWriter?: RepairDependencies['prepareWriter']
+  reportError?: RepairDependencies['reportError']
   writers?: Array<WriterResult | null>
 }) {
   const commands = [...(options.commands ?? [])]
+  const heads = [...(options.heads ?? [])]
   const patches = [...(options.patches ?? [])]
   const writers = [...(options.writers ?? [])]
   const commandRunner: CommandRunner = {
@@ -85,6 +89,7 @@ function dependencies(options: {
   }
   const git: GitAdapter = {
     baseline: vi.fn(async () => ({ workspaceRoot: '/repo', head: 'abc', clean: options.clean ?? true })),
+    head: vi.fn(async () => heads.shift() ?? 'abc'),
     isClean: vi.fn(async () => options.clean ?? true),
     patch: vi.fn(async (_root, revision) => patches.shift() ?? patch(revision)),
   }
@@ -99,6 +104,8 @@ function dependencies(options: {
     git,
     activeRuns: new InMemoryActiveRunRegistry(),
     runWriter,
+    ...(options.prepareWriter === undefined ? {} : { prepareWriter: options.prepareWriter }),
+    ...(options.reportError === undefined ? {} : { reportError: options.reportError }),
     runId: () => 'run-1',
     now: () => new Date('2026-08-16T00:00:00.000Z'),
   }
@@ -176,6 +183,19 @@ describe('repair_failure transaction', () => {
       commands: [evidence('pnpm test repro', { exitCode: 1, combinedOutput: 'expected 4, received 3\n' })],
     })
     vi.mocked(deps.git.isClean).mockResolvedValueOnce(false)
+    const result = await executeRepairFailure({
+      args: args(), agent: agent(), toolCallId: 'call-1', signal: new AbortController().signal, dependencies: deps,
+    })
+
+    expect(result.status).toBe('blocked_repro_side_effect')
+    expect(deps.runWriter).not.toHaveBeenCalled()
+  })
+
+  it('blocks when reproduction changes HEAD while leaving the worktree clean', async () => {
+    const deps = dependencies({
+      commands: [evidence('pnpm test repro', { exitCode: 1, combinedOutput: 'expected 4, received 3\n' })],
+      heads: ['changed-head'],
+    })
     const result = await executeRepairFailure({
       args: args(), agent: agent(), toolCallId: 'call-1', signal: new AbortController().signal, dependencies: deps,
     })
@@ -283,6 +303,89 @@ describe('repair_failure transaction', () => {
     expect(result.status).toBe('validation_failed')
   })
 
+  it('invalidates validation when HEAD changes after the writer', async () => {
+    const deps = dependencies({
+      commands: [
+        evidence('pnpm test repro', { exitCode: 1, combinedOutput: 'expected 4, received 3\n' }),
+      ],
+      heads: ['abc', 'changed-head'],
+      writers: [writer],
+    })
+    const result = await executeRepairFailure({
+      args: args(), agent: agent(), toolCallId: 'call-1', signal: new AbortController().signal, dependencies: deps,
+    })
+    expect(result.status).toBe('validation_failed')
+    expect(deps.commandRunner.run).toHaveBeenCalledTimes(1)
+  })
+
+  it('returns infrastructure_error and attempts a receipt for controlled adapter failures', async () => {
+    const deps = dependencies({})
+    vi.mocked(deps.git.baseline).mockRejectedValueOnce(new Error('git unavailable'))
+    const caller = agent()
+    const result = await executeRepairFailure({
+      args: args(), agent: caller, toolCallId: 'call-1', signal: new AbortController().signal, dependencies: deps,
+    })
+
+    expect(result.status).toBe('infrastructure_error')
+    expect(result.residualRisks).toContain('git unavailable')
+    expect(caller.session.events.at(-1)).toMatchObject({
+      type: 'reprofix/receipt',
+      data: { status: 'infrastructure_error' },
+    })
+  })
+
+  it('reports a missing writer model adapter after RED as infrastructure_error', async () => {
+    const deps = dependencies({
+      commands: [
+        evidence('pnpm test repro', { exitCode: 1, combinedOutput: 'expected 4, received 3\n' }),
+      ],
+      prepareWriter: () => { throw new Error('No LLM adapter for provider "missing"') },
+      writers: [writer],
+    })
+    const result = await executeRepairFailure({
+      args: args(), agent: agent(), toolCallId: 'call-1', signal: new AbortController().signal, dependencies: deps,
+    })
+
+    expect(result.status).toBe('infrastructure_error')
+    expect(result.residualRisks).toContain('No LLM adapter for provider "missing"')
+    expect(deps.runWriter).not.toHaveBeenCalled()
+  })
+
+  it('releases the active claim when the first state append fails', async () => {
+    const reportError = vi.fn()
+    const deps = dependencies({ reportError })
+    const caller = agent()
+    vi.spyOn(caller.session, 'append')
+      .mockImplementationOnce(() => { throw new Error('state persistence failed') })
+
+    const result = await executeRepairFailure({
+      args: args(), agent: caller, toolCallId: 'call-1', signal: new AbortController().signal, dependencies: deps,
+    })
+    expect(result.status).toBe('infrastructure_error')
+    expect(result.residualRisks).toContain('state persistence failed')
+    expect(deps.activeRuns.current(caller)).toBeUndefined()
+    expect(deps.activeRuns.claim(String(caller.id), 'retry', caller)).toBe(true)
+  })
+
+  it('reports receipt persistence failure and releases the active claim', async () => {
+    const reportError = vi.fn()
+    const deps = dependencies({ clean: false, reportError })
+    const caller = agent()
+    const originalAppend = caller.session.append.bind(caller.session)
+    vi.spyOn(caller.session, 'append').mockImplementation(((type: string, data: unknown) => {
+      if (type === 'reprofix/receipt') throw new Error('receipt persistence failed')
+      return originalAppend(type as never, data as never)
+    }) as never)
+
+    const result = await executeRepairFailure({
+      args: args(), agent: caller, toolCallId: 'call-1', signal: new AbortController().signal, dependencies: deps,
+    })
+    expect(result.status).toBe('blocked_dirty_workspace')
+    expect(reportError).toHaveBeenCalledWith(expect.stringContaining('receipt persistence failed'))
+    expect(deps.activeRuns.current(caller)).toBeUndefined()
+    expect(deps.activeRuns.claim(String(caller.id), 'retry', caller)).toBe(true)
+  })
+
   it('uses only the latest round validation and keeps writers serial', async () => {
     const deps = dependencies({
       commands: [
@@ -311,5 +414,77 @@ describe('repair_failure transaction', () => {
     })
     expect(result.status).toBe('cancelled')
     expect(deps.commandRunner.run).not.toHaveBeenCalled()
+  })
+
+  it('returns cancelled when the host aborts during Git baseline discovery', async () => {
+    const controller = new AbortController()
+    const deps = dependencies({ clean: false })
+    vi.mocked(deps.git.baseline).mockImplementationOnce(async () => {
+      controller.abort('user')
+      return { workspaceRoot: '/repo', head: 'abc', clean: false }
+    })
+    const result = await executeRepairFailure({
+      args: args(), agent: agent(), toolCallId: 'call-1', signal: controller.signal, dependencies: deps,
+    })
+    expect(result.status).toBe('cancelled')
+    expect(deps.commandRunner.run).not.toHaveBeenCalled()
+  })
+
+  it('returns cancelled when the host aborts during the post-reproduction clean check', async () => {
+    const controller = new AbortController()
+    const deps = dependencies({
+      commands: [
+        evidence('pnpm test repro', { exitCode: 1, combinedOutput: 'expected 4, received 3\n' }),
+      ],
+    })
+    vi.mocked(deps.git.isClean).mockImplementationOnce(async () => {
+      controller.abort('user')
+      return false
+    })
+    const result = await executeRepairFailure({
+      args: args(), agent: agent(), toolCallId: 'call-1', signal: controller.signal, dependencies: deps,
+    })
+    expect(result.status).toBe('cancelled')
+    expect(deps.runWriter).not.toHaveBeenCalled()
+  })
+
+  it('returns cancelled when the host aborts while reading the writer patch', async () => {
+    const controller = new AbortController()
+    const deps = dependencies({
+      commands: [
+        evidence('pnpm test repro', { exitCode: 1, combinedOutput: 'expected 4, received 3\n' }),
+      ],
+      writers: [writer],
+    })
+    vi.mocked(deps.git.patch).mockImplementationOnce(async () => {
+      controller.abort('user')
+      return { ...patch(1), changedFiles: [] }
+    })
+    const result = await executeRepairFailure({
+      args: args(), agent: agent(), toolCallId: 'call-1', signal: controller.signal, dependencies: deps,
+    })
+    expect(result.status).toBe('cancelled')
+  })
+
+  it('returns cancelled when the host aborts during the final patch fingerprint read', async () => {
+    const controller = new AbortController()
+    const deps = dependencies({
+      commands: [
+        evidence('pnpm test repro', { exitCode: 1, combinedOutput: 'expected 4, received 3\n' }),
+        evidence('pnpm test repro'), evidence('pnpm test'), evidence('pnpm typecheck'),
+      ],
+      patches: [patch(1)],
+      writers: [writer],
+    })
+    vi.mocked(deps.git.patch)
+      .mockImplementationOnce(async (_root, revision) => patch(revision))
+      .mockImplementationOnce(async (_root, revision) => {
+        controller.abort('user')
+        return patch(revision)
+      })
+    const result = await executeRepairFailure({
+      args: args(), agent: agent(), toolCallId: 'call-1', signal: controller.signal, dependencies: deps,
+    })
+    expect(result.status).toBe('cancelled')
   })
 })

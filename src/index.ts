@@ -1,4 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis'
+import type {} from '@deepseek-ai/dsh-llm'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-workflow'
 import type {} from '@deepseek-ai/dsh-shell'
@@ -10,6 +11,8 @@ import { InMemoryActiveRunRegistry, installGuard } from './guard.js'
 import { executeRepairFailure } from './repair.js'
 import { renderRepairFailureResultMarkdown } from './receipt.js'
 import { createCommandRunner, createGitAdapter } from './runner.js'
+import { FileWorkspaceLock } from './workspace-lock.js'
+import { runWriterWorkflow } from './workflow.js'
 import type {} from './session.js'
 
 export * from './domain.js'
@@ -18,9 +21,10 @@ export * from './receipt.js'
 export * from './repair.js'
 export * from './runner.js'
 export * from './workflow.js'
+export * from './workspace-lock.js'
 
 export const name = 'reprofix'
-export const inject = ['tools', 'workflowEngine', 'shell']
+export const inject = ['tools', 'workflowEngine', 'shell', 'llm']
 
 const EXPECTATION_PROPERTIES = {
   exitCodes: { type: 'array', items: { type: 'integer' } },
@@ -97,6 +101,7 @@ const RESULT_SCHEMA = {
         'repair_failed',
         'validation_failed',
         'cancelled',
+        'infrastructure_error',
       ],
     },
     summary: { type: 'string', required: true },
@@ -113,6 +118,8 @@ export function apply(ctx: Context): void {
   installGuard(ctx, activeRuns)
   const commandRunner = createCommandRunner(ctx)
   const git = createGitAdapter(ctx)
+  const workspaceLock = new FileWorkspaceLock()
+  const runWriter: typeof runWriterWorkflow = (input) => runWriterWorkflow({ ...input, ctx })
 
   ctx.tools.register(defineTool({
     name: 'repair_failure',
@@ -181,7 +188,20 @@ export function apply(ctx: Context): void {
         agent,
         toolCallId: String(exec.callId),
         signal: exec.signal,
-        dependencies: { commandRunner, git, activeRuns },
+        dependencies: {
+          commandRunner,
+          git,
+          activeRuns,
+          workspaceLock,
+          runWriter,
+          prepareWriter: () => {
+            const provider = agent.options.provider
+            if (!provider || ctx.llm.listProviders().some((entry) => entry.id === provider)) return
+            throw new Error(
+              `No LLM adapter for provider "${provider}" in the active DSH profile`,
+            )
+          },
+        },
       })
     },
   }))

@@ -79,6 +79,8 @@ try {
   process.stdout.write(imported)
   const installed = join(consumer, 'node_modules', manifest.name)
   for (const path of [
+    'demos/not-reproduced.json',
+    'fixtures/buggy-project/src/add.ts',
     'preset/coding/agent.cordis.yml',
     'preset/coding/preset.yml',
     'preset/reprofix/agent.cordis.yml',
@@ -94,6 +96,13 @@ try {
   })
   readFileSync(join(presetHome, '.agent-presets', 'dshagent', 'agent.cordis.yml'))
   readFileSync(join(presetHome, '.agent-presets', 'reprofix', 'agent.cordis.yml'))
+  const cliEntry = join(installed, manifest.bin.dshagent)
+  const cliHelp = execFileSync(process.execPath, [cliEntry, '--help'], {
+    cwd: consumer,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'inherit'],
+  })
+  if (!cliHelp.includes('dshagent repair')) throw new Error('packed dshagent bin did not render help')
   const clientEntry = join(installed, manifest.bin['dshagent-client'])
   const clientHelp = execFileSync(process.execPath, [clientEntry, '--help'], {
     cwd: consumer,
@@ -101,7 +110,7 @@ try {
     stdio: ['ignore', 'pipe', 'inherit'],
   })
   if (!clientHelp.includes('dshagent-client')) throw new Error('packed client bin did not render help')
-  console.log(`pack:check imported ${manifest.name} and executed its client bin from ${tarball}`)
+  console.log(`pack:check imported ${manifest.name} and executed its CLI bins from ${tarball}`)
 } finally {
   rmSync(temporary, { recursive: true, force: true })
 }

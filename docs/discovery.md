@@ -62,9 +62,20 @@ fixed standard preset. It mounts:
 
 The locked-state allowlist is `read`, `glob`, `grep`, and `repair_failure`.
 `write`, `edit`, `bash`, and `pwsh` are denied before the exact RED gate; unknown
-tools are denied. Terminal states relock the gate. The package bundle overlay is
-empty deliberately: installing the package must not install a process-global
-guard. The preset must be registered under a configured Agent Preset root.
+tools are denied. After RED, the writer allowlist is `read`, `glob`, `grep`,
+`write`, `edit`, and DSH's schema-result control channel `structured_output`;
+shell and unknown capability tools remain denied. Terminal states relock the
+gate. The package bundle overlay is empty deliberately: installing the package
+must not install a process-global guard. The preset must be registered under a
+configured Agent Preset root.
+
+The V0.1 CLI disables the headless profile's process-global agent-plane rows,
+mounts the selected project Preset through `@deepseek-ai/dsh-agent-presets`, and
+uses `src/cli-runner.ts` as the one-shot driver. `repair.json` is normalized and
+confirmed before launch, persisted in a mode-`0600` temporary context, and
+fingerprinted with the canonical Git root. The runner verifies that fingerprint
+and calls `repair_failure` directly; reproduction and acceptance commands never
+pass through model text.
 
 ## Code Mode decision
 
@@ -88,6 +99,9 @@ pnpm pack:check
 ```
 
 `test:preset-smoke` owns real DSH preset mounting and native guard checks.
+`test/cli.test.ts` covers trusted launch context, non-TTY confirmation, argv
+isolation, timeout, and signal termination. `test/workspace-lock.test.ts`
+includes a real second-process lock owner and stale recovery.
 `pack:check` packs the package, installs that tarball into a fresh temporary
 project, and imports the public package export. A passing source import alone is
 not release evidence.

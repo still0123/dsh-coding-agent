@@ -62,7 +62,7 @@ describe('ReproFix guard', () => {
     const ctx = new Context()
     await ctx.plugin(SystemPrompt, {})
     await ctx.plugin(ToolRuntime, { mode: 'native' })
-    register(ctx, 'write')
+    for (const name of ['write', 'structured_output', 'bash', 'mystery']) register(ctx, name)
     const registry = new InMemoryActiveRunRegistry()
     installGuard(ctx, registry)
     const owner = agent('owner')
@@ -73,6 +73,12 @@ describe('ReproFix guard', () => {
     owner.session.append('reprofix/run-state', { runId: 'run-1', state: 'reproduced' })
     registry.setState('owner', 'run-1', 'reproduced')
     expect((await execute(ctx, 'write', child)).isError).toBe(false)
+    expect((await execute(ctx, 'structured_output', child)).isError).toBe(false)
+    for (const name of ['bash', 'mystery']) {
+      const result = await execute(ctx, name, child)
+      expect(result.isError).toBe(true)
+      expect(result.content[0]).toMatchObject({ text: expect.stringContaining('wrapper-owned') })
+    }
     expect((await execute(ctx, 'write', stale)).isError).toBe(true)
 
     owner.session.append('reprofix/run-state', { runId: 'run-1', state: 'fixed' })

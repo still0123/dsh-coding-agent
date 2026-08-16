@@ -4,6 +4,7 @@
   "description": "DSH coding-agent distribution with a reproduce-first ReproFix repair mode.",
   "type": "module",
   "bin": {
+    "dshagent": "./client/cli.mjs",
     "dshagent-client": "./client/server.mjs",
     "dshagent-presets": "./scripts/install-presets.mjs"
   },
@@ -19,7 +20,10 @@
   "files": [
     "dist",
     "client",
+    "demos",
+    "fixtures",
     "preset",
+    "scripts/demo.mjs",
     "scripts/install-presets.mjs",
     "cordis.patch.yml",
     "README.md",
@@ -33,9 +37,13 @@
   "scripts": {
     "clean": "rm -rf dist",
     "typecheck": "tsc --noEmit --pretty false",
-    "test": "vitest run test/domain.test.ts test/guard.test.ts test/runner.test.ts test/workflow.test.ts test/receipt.test.ts test/phase0.smoke.test.ts test/local-client.test.ts test/install-presets.test.ts",
+    "test": "vitest run test/domain.test.ts test/guard.test.ts test/runner.test.ts test/workflow.test.ts test/receipt.test.ts test/phase0.smoke.test.ts test/local-client.test.ts test/install-presets.test.ts test/workspace-lock.test.ts test/cli.test.ts",
     "build": "tsc --pretty false",
     "client": "node client/server.mjs",
+    "dshagent": "node client/cli.mjs",
+    "demo:not-reproduced": "node scripts/demo.mjs not-reproduced",
+    "demo:fixed": "node scripts/demo.mjs fixed",
+    "demo:validation-failed": "node scripts/demo.mjs validation-failed",
     "test:integration": "vitest run test/repair-failure.integration.test.ts test/golden-fixture.integration.test.ts",
     "test:preset-smoke": "vitest run test/dsh-preset.smoke.test.ts",
     "pack:check": "node scripts/pack-check.mjs"
@@ -45,6 +53,7 @@
     "@deepseek-ai/cordis": "4.0.1",
     "@deepseek-ai/dsh": "0.1.0-rc.6",
     "@deepseek-ai/dsh-agent": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-llm": "0.1.0-rc.6",
     "@deepseek-ai/dsh-session": "0.1.0-rc.6",
     "@deepseek-ai/dsh-shell": "0.1.0-rc.6",
     "@deepseek-ai/dsh-tools": "0.1.0-rc.6",

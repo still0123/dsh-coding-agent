@@ -99,6 +99,7 @@ export type RepairFailureStatus =
   | 'repair_failed'
   | 'validation_failed'
   | 'cancelled'
+  | 'infrastructure_error'
 
 export interface RepairCheck {
   kind: 'reproduction' | 'post_fix_repro' | 'acceptance'
@@ -362,6 +363,19 @@ export function sha256Digest(value: string | Uint8Array): `sha256:${string}` {
 
 export function fingerprint(value: unknown): `sha256:${string}` {
   return sha256Digest(stableCanonicalJson(value))
+}
+
+export function repairInputFingerprint(
+  input: NormalizedRepairFailureInput,
+  workspaceRoot: string,
+): `sha256:${string}` {
+  return fingerprint({
+    workspaceRoot,
+    input: {
+      ...input,
+      failureLog: input.failureLog === undefined ? undefined : fingerprint(input.failureLog),
+    },
+  })
 }
 
 function boundedUtf8(value: string, maxBytes: number): { value: string; truncated: boolean } {

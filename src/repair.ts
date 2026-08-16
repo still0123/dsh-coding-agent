@@ -1,11 +1,11 @@
 import { randomUUID } from 'node:crypto'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import {
-  fingerprint,
   foldRunStates,
   isTerminalRunState,
   matchesFailure,
   matchesSuccess,
+  repairInputFingerprint,
   type CommandEvidence,
   type Diagnosis,
   type NormalizedRepairFailureInput,
@@ -17,6 +17,7 @@ import {
   type RunState,
 } from './domain.js'
 import { diagnosisFromWriter, runWriterWorkflow, type WorkflowAttempt } from './workflow.js'
+import type { WorkspaceLock } from './workspace-lock.js'
 
 export interface BaselineEvidence {
   workspaceRoot: string
@@ -36,6 +37,7 @@ export interface CommandRunner {
 
 export interface GitAdapter {
   baseline(cwd: string): Promise<BaselineEvidence>
+  head(workspaceRoot: string): Promise<string>
   isClean(workspaceRoot: string): Promise<boolean>
   patch(workspaceRoot: string, revision: number): Promise<PatchSummary>
 }
@@ -50,10 +52,13 @@ export interface RepairDependencies {
   commandRunner: CommandRunner
   git: GitAdapter
   activeRuns: ActiveRunRegistry
+  workspaceLock?: WorkspaceLock
+  prepareWriter?: () => Promise<void> | void
   maxOutputBytes?: number
   runWriter?: typeof runWriterWorkflow
   now?: () => Date
   runId?: () => string
+  reportError?: (message: string) => void
 }
 
 interface ReceiptContext {
@@ -111,10 +116,11 @@ function statusSummary(status: RepairFailureStatus): string {
     case 'not_reproduced': return 'The reproduction command did not match the declared failure signature.'
     case 'blocked_dirty_workspace': return 'The workspace was dirty before reproduction, so no command or writer ran.'
     case 'blocked_repro_side_effect': return 'The reproduction command changed the workspace, so the writer was not started.'
-    case 'blocked_active_run': return 'Another ReproFix run is already active for this Session.'
+    case 'blocked_active_run': return 'Another ReproFix run is already active for this workspace.'
     case 'repair_failed': return 'The writer workflow did not produce a valid patch.'
     case 'validation_failed': return 'The final patch did not pass wrapper-owned validation.'
     case 'cancelled': return 'The ReproFix run was cancelled.'
+    case 'infrastructure_error': return 'ReproFix could not complete because a required local service failed.'
   }
 }
 
@@ -148,10 +154,7 @@ function terminalResult(
     status,
     startedAt: context.startedAt,
     finishedAt,
-    inputFingerprint: fingerprint({
-      ...input,
-      failureLog: input.failureLog === undefined ? undefined : fingerprint(input.failureLog),
-    }),
+    inputFingerprint: repairInputFingerprint(input, context.baseline.workspaceRoot),
     baseline: context.baseline,
     reproduction: receiptEvidence(context.reproduction),
     ...(context.diagnosis === undefined ? {} : { diagnosis: context.diagnosis }),
@@ -173,6 +176,7 @@ export async function executeRepairFailure(input: {
 }): Promise<RepairFailureResult> {
   const { args, agent, toolCallId, signal, dependencies } = input
   const now = dependencies.now ?? (() => new Date())
+  const reportError = dependencies.reportError ?? ((message: string) => process.stderr.write(`${message}\n`))
   const runId = (dependencies.runId ?? randomUUID)()
   const sessionId = String(agent.id)
   const cwd = agent.session.header.cwd
@@ -204,9 +208,17 @@ export async function executeRepairFailure(input: {
   const checks: RepairCheck[] = []
 
   const finish = (status: RepairFailureStatus): RepairFailureResult => {
-    appendState(status)
+    try {
+      appendState(status)
+    } catch (error) {
+      reportError(`ReproFix could not append terminal state: ${error instanceof Error ? error.message : String(error)}`)
+    }
     const { result, receipt } = terminalResult(context, args, status, checks, now().toISOString())
-    agent.session.append('reprofix/receipt', receipt)
+    try {
+      agent.session.append('reprofix/receipt', receipt)
+    } catch (error) {
+      reportError(`ReproFix could not persist receipt: ${error instanceof Error ? error.message : String(error)}`)
+    }
     return result
   }
 
@@ -214,13 +226,31 @@ export async function executeRepairFailure(input: {
     return finish('blocked_active_run')
   }
 
+  let workspaceClaimed = false
   try {
     appendState('created')
     if (signal.aborted) return finish('cancelled')
 
     const baseline = await dependencies.git.baseline(cwd)
     context.baseline = baseline
+    if (signal.aborted) return finish('cancelled')
     if (!baseline.clean) return finish('blocked_dirty_workspace')
+    if (dependencies.workspaceLock) {
+      workspaceClaimed = await dependencies.workspaceLock.claim({
+        runId,
+        sessionId,
+        workspaceRoot: baseline.workspaceRoot,
+      })
+      if (signal.aborted) return finish('cancelled')
+      if (!workspaceClaimed) return finish('blocked_active_run')
+      const cleanBeforeReproduction = await dependencies.git.isClean(baseline.workspaceRoot)
+      if (signal.aborted) return finish('cancelled')
+      const headBeforeReproduction = await dependencies.git.head(baseline.workspaceRoot)
+      if (signal.aborted) return finish('cancelled')
+      if (!cleanBeforeReproduction || headBeforeReproduction !== baseline.head) {
+        return finish('blocked_repro_side_effect')
+      }
+    }
 
     const priorStates = foldRunStates(
       agent.session.events
@@ -249,9 +279,17 @@ export async function executeRepairFailure(input: {
     checks.push(toCheck(reproduction, 'reproduction', 'declared reproduction', reproduced))
     if (signal.aborted || reproduction.aborted) return finish('cancelled')
     if (!reproduced) return finish('not_reproduced')
-    if (!(await dependencies.git.isClean(baseline.workspaceRoot))) return finish('blocked_repro_side_effect')
+    const cleanAfterReproduction = await dependencies.git.isClean(baseline.workspaceRoot)
+    if (signal.aborted) return finish('cancelled')
+    const headAfterReproduction = await dependencies.git.head(baseline.workspaceRoot)
+    if (signal.aborted) return finish('cancelled')
+    if (!cleanAfterReproduction || headAfterReproduction !== baseline.head) {
+      return finish('blocked_repro_side_effect')
+    }
 
     appendState('reproduced')
+    await dependencies.prepareWriter?.()
+    if (signal.aborted) return finish('cancelled')
     const writer = dependencies.runWriter ?? runWriterWorkflow
     let previousValidation: CommandEvidence[] | undefined
 
@@ -292,8 +330,14 @@ export async function executeRepairFailure(input: {
 
       context.diagnosis = diagnosisFromWriter(attempt.writer)
       context.residualRisks = attempt.writer.residualRisks
+      const headAfterWriter = await dependencies.git.head(baseline.workspaceRoot)
+      if (signal.aborted) return finish('cancelled')
+      if (headAfterWriter !== baseline.head) {
+        return finish('validation_failed')
+      }
       const patch = await dependencies.git.patch(baseline.workspaceRoot, round)
       context.patch = patch
+      if (signal.aborted) return finish('cancelled')
       if (patch.changedFiles.length === 0) return finish('repair_failed')
 
       appendState('validating', round)
@@ -328,14 +372,32 @@ export async function executeRepairFailure(input: {
       if (signal.aborted || validation.some((item) => item.aborted)) return finish('cancelled')
 
       const afterPatch = await dependencies.git.patch(baseline.workspaceRoot, round)
-      if (afterPatch.fingerprint !== beforeFingerprint) passed = false
       context.patch = afterPatch
+      if (signal.aborted) return finish('cancelled')
+      if (afterPatch.fingerprint !== beforeFingerprint) passed = false
+      const headAfterValidation = await dependencies.git.head(baseline.workspaceRoot)
+      if (signal.aborted) return finish('cancelled')
+      if (headAfterValidation !== baseline.head) passed = false
       if (passed) return finish('fixed')
       previousValidation = validation
     }
 
     return finish('validation_failed')
+  } catch (error) {
+    context.residualRisks.push(error instanceof Error ? error.message : String(error))
+    return finish(signal.aborted ? 'cancelled' : 'infrastructure_error')
   } finally {
+    if (workspaceClaimed && dependencies.workspaceLock) {
+      try {
+        await dependencies.workspaceLock.release({
+          runId,
+          sessionId,
+          workspaceRoot: context.baseline.workspaceRoot,
+        })
+      } catch (error) {
+        reportError(`ReproFix could not release workspace lock: ${error instanceof Error ? error.message : String(error)}`)
+      }
+    }
     dependencies.activeRuns.release(sessionId, runId)
   }
 }

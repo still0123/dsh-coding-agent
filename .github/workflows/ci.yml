@@ -40,5 +40,5 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: pnpm build
-      - run: pnpm exec vitest run test/local-client.test.ts
+      - run: pnpm exec vitest run test/cli.test.ts test/local-client.test.ts
       - run: pnpm pack:check
