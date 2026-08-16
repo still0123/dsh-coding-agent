@@ -1,231 +1,301 @@
 # dsh-reprofix
 
-Reproduce-first repair transactions for DeepSeek Harness (DSH).
+[![CI](https://github.com/still0123/dshagent/actions/workflows/ci.yml/badge.svg)](https://github.com/still0123/dshagent/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![DSH](https://img.shields.io/badge/DeepSeek%20Harness-0.1.0--rc.6-4e51e8)](https://github.com/deepseek-ai/deepseek-harness)
 
-`dsh-reprofix` adds one model-callable tool, `repair_failure`. The wrapper checks
-a clean Git baseline, runs the declared reproduction command itself, requires an
-exact exit-code and literal-output match, unlocks one serial writer only after
-that RED evidence, and independently reruns the post-fix reproduction plus every
-acceptance command. The complete result is appended as an auditable Session
-receipt.
+**一个只在真实失败被精确复现后，才允许 Agent 修改代码的 DeepSeek Harness 修复插件。**
 
-This project is derived from `omdsh-dev/dsh-inspect` at commit
-`9876349054f0fec33114f7f594b4901b7e9420f1`. It retains the upstream MIT notice
-but does not retain the CHECKUP, FIX, or REVIEW product behavior.
+ReproFix 解决的是常见的 AI 修复问题：模型看到一段报错后直接改代码，最后声称
+“已经修好”，但它可能没有复现原始问题，也没有运行完整验收。
 
-## Safety model
+ReproFix 把修复过程变成一个受控流程：
 
-A run can return `fixed` only when all of these hold:
+```text
+检查 Git 工作区干净
+        ↓
+运行用户声明的复现命令
+        ↓
+退出码 + 失败文本精确匹配（RED）
+        ↓
+临时开放一个 writer Agent 修改代码
+        ↓
+插件重新运行复现命令和全部验收命令（GREEN）
+        ↓
+确认验证前后的补丁指纹没有变化
+        ↓
+写入可审计的 Session Receipt
+```
 
-- the initial tracked and untracked Git worktree is clean;
-- the wrapper's current reproduction process starts and exactly matches the
-  declared failure exit rule and every case-sensitive literal;
-- the reproduction command leaves the worktree unchanged;
-- one writer at a time edits only after exact RED;
-- the wrapper, not the writer's prose, reruns post-fix reproduction and all
-  declared acceptance commands;
-- the patch fingerprint is unchanged before and after final validation;
-- the receipt is appended as the log-only `reprofix/receipt` Session event.
+ReproFix 不是通用 Coding Agent，也不是新的 Agent Runtime。模型、Session、工具、
+Shell、Sandbox 和 Workflow 都由 DSH 提供；本项目只负责“先复现、后修复、再验证”
+这一条严格修复流程。
 
-The plugin never commits, pushes, creates branches or worktrees, resets, checks
-out, cleans, deploys, or deletes user changes. A failed repair remains in the
-worktree for the user to inspect.
+> [!IMPORTANT]
+> 当前版本为 `0.1.0`，仅支持从源码运行，尚未发布到 npm 或 GitHub Releases。
 
-## Requirements
+## 它实际做什么
+
+ReproFix 向 DSH 注册一个模型工具：
+
+```text
+repair_failure
+```
+
+调用该工具时，插件会：
+
+1. 找到当前工作区的 Git 根目录。
+2. 拒绝包含 tracked 或 untracked 改动的工作区。
+3. 运行 `repro.command`。
+4. 同时校验退出码和所有大小写敏感的 `outputIncludes` 文本。
+5. 只有匹配成功才开放写文件和 Shell 工具。
+6. 启动最多一个 writer Agent 诊断并修改代码。
+7. 由插件重新运行复现命令和最多 10 条验收命令。
+8. 比较验证前后的 Git 补丁指纹，防止测试过程继续改动补丁。
+9. 把结果写入 `reprofix/receipt` Session 事件。
+
+失败日志 `failureLog` 只作为诊断上下文，永远不能代替当前机器上的真实复现结果。
+
+## 适合与不适合
+
+适合：
+
+- 已经有稳定复现命令的单元测试、集成测试或构建错误。
+- 希望限制 Agent 在确认原始故障前修改代码。
+- 需要保存退出码、输出摘要、补丁信息和验收结果。
+- 希望失败修复保留在工作区，便于人工检查。
+
+不适合：
+
+- 没有可重复复现方式的模糊问题。
+- 需要同时修改多个仓库的任务。
+- 需要自动创建 PR、提交或推送代码的流程。
+- 需要 Code Mode / `run_code` 的 Agent。
+- 需要隔离容器或临时 Git worktree 的不可信任务。
+
+## 环境要求
 
 - Node.js `^22.19.0 || >=24.0.0`
 - pnpm `11.7.0`
-- a Git repository launched at, or resolvable to, its top-level directory
-- DSH `0.1.0-rc.6` packages and `@deepseek-ai/cordis@4.0.1`
+- Git
+- DSH `0.1.0-rc.6`
+- 已配置可用模型的 DSH 环境
 
-The fixed source baseline was DSH commit
-`47f943859bef60e4160492346772ded9b24f765a` (`0.1.0-rc.5`). That release
-candidate is not available from npm, so this standalone package uses exact
-published rc.6 dependencies. See `docs/discovery.md` for the verified API delta.
+## 快速体验：本地客户端
 
-## Install
+这是目前最简单的运行方式。客户端会在本机启动一个只监听 `127.0.0.1` 的页面，
+每次提交启动一个独立的 DSH headless 进程。
 
-Install the bundle into the profile you run:
+```bash
+git clone https://github.com/still0123/dshagent.git
+cd dshagent
 
-```sh
-dsh plugin --profile web add dsh-reprofix
+npm install -g pnpm@11.7.0
+pnpm install --frozen-lockfile --ignore-scripts
+pnpm build
+
+# 使用环境变量或 DSH 凭据文件配置模型
+export DEEPSEEK_API_KEY="your-key"
+
+pnpm client
 ```
 
-The bundle overlay is intentionally empty: installing a package must not attach
-a mutation guard to every Agent. Register the packaged preset in an Agent Preset
-root instead. For the default user-authored root:
+Windows PowerShell：
 
-```sh
+```powershell
+git clone https://github.com/still0123/dshagent.git
+cd dshagent
+
+npm install -g pnpm@11.7.0
+pnpm install --frozen-lockfile --ignore-scripts
+pnpm build
+
+$env:DEEPSEEK_API_KEY = "your-key"
+pnpm client
+```
+
+启动后浏览器会自动打开本地页面。页面需要两个输入：
+
+- **Git workspace**：待修复仓库的绝对路径。
+- **repair_failure JSON**：任务、复现规则和验收命令。
+
+可选参数：
+
+```bash
+pnpm exec dsh-reprofix-client --no-open
+pnpm exec dsh-reprofix-client --port 4317
+```
+
+## 安装到已有 DSH Web
+
+先构建本项目，并把本地 checkout 安装到 `web` profile：
+
+```bash
+git clone https://github.com/still0123/dshagent.git
+cd dshagent
+
+npm install -g pnpm@11.7.0
+pnpm install --frozen-lockfile --ignore-scripts
+pnpm build
+
+npm install -g @deepseek-ai/dsh@0.1.0-rc.6
+dsh plugin --profile web add .
+```
+
+然后注册项目自带的 Agent Preset：
+
+```bash
 DSH_HOME="${DSH_HOME:-$HOME/.dsh}"
 PROFILE="$DSH_HOME/profiles/web"
-mkdir -p "$DSH_HOME/.agent-presets/reprofix"
+TARGET="$DSH_HOME/.agent-presets/reprofix"
+
+mkdir -p "$TARGET"
 cp "$PROFILE/node_modules/dsh-reprofix/preset/reprofix/agent.cordis.yml" \
   "$PROFILE/node_modules/dsh-reprofix/preset/reprofix/preset.yml" \
-  "$DSH_HOME/.agent-presets/reprofix/"
+  "$TARGET/"
+
+dsh web
 ```
 
-Restart DSH after first installation, select the **ReproFix** Agent Preset, and
-open the Git repository to repair as the workspace. A deployment with custom
-preset roots should register `preset/reprofix` under one of those roots instead.
-The profile installation keeps the bare `dsh-reprofix` plugin package resolvable
-for the copied composition.
+在新建会话时选择 **ReproFix**，并把待修复 Git 仓库设为工作区。
 
-## Local client
+安装包的 `cordis.patch.yml` 故意保持为空。ReproFix Guard 只应挂载到 ReproFix
+Preset，不能全局限制其他 DSH Agent。
 
-The package also ships `dsh-reprofix-client`, a zero-dependency local Web UI for
-macOS and Windows (and Linux). It binds only to `127.0.0.1`, rejects non-numeric
-loopback `Host` headers, generates a random per-process request token, accepts one
-run at a time, and launches the installed DSH Node entry with `shell: false` in
-native Tool mode.
-
-Install the plugin and DSH in the same project, build the plugin, then start the
-client:
-
-```sh
-pnpm add dsh-reprofix @deepseek-ai/dsh@0.1.0-rc.6
-pnpm exec dsh-reprofix-client
-```
-
-The browser opens automatically. Use `--no-open` for a terminal-only launch or
-`--port 4317` to choose a fixed loopback port:
-
-```sh
-pnpm exec dsh-reprofix-client --no-open --port 4317
-```
-
-The UI asks for an absolute Git workspace and the same `repair_failure` JSON
-shown below. It starts a dedicated `dsh --profile headless` process with a
-temporary bridge that registers ReproFix only on that process's top-level Agent
-scope; subagents inherit the scoped tool/guard through DSH and no host-global
-ReproFix guard is installed. On Windows the client executes
-`@deepseek-ai/dsh/lib/bin.js` through `process.execPath`; it never invokes a
-`.cmd` shim through a shell. Set `DSH_NODE_ENTRY` only when DSH lives outside the
-client project's dependency tree.
-
-The client is a launcher, not a second repair runtime: the plugin still owns the
-clean baseline, exact RED gate, writer serialization, validation, and Receipt.
-It exposes no non-loopback listener and terminates the active DSH child when the
-client stops.
-
-## Use
-
-Ask the ReproFix agent to repair a failure and provide deterministic evidence:
+## 输入示例
 
 ```json
 {
-  "task": "Fix add() so the regression test passes without changing its API.",
-  "failureLog": "Optional context only; this never unlocks writing.",
+  "task": "修复 add()，不要改变公开 API。",
+  "failureLog": "可选的历史报错，只用于帮助诊断。",
   "repro": {
     "command": "pnpm test -- add.test.ts",
     "timeoutMs": 120000,
     "failure": {
       "exitCodes": [1],
-      "outputIncludes": ["expected 4, received 3"]
+      "outputIncludes": [
+        "expected 4, received 3"
+      ]
     },
     "success": {
       "exitCodes": [0]
     }
   },
   "acceptance": [
-    { "name": "typecheck", "command": "pnpm typecheck" },
-    { "name": "unit", "command": "pnpm test" }
+    {
+      "name": "typecheck",
+      "command": "pnpm typecheck"
+    },
+    {
+      "name": "unit",
+      "command": "pnpm test"
+    }
   ],
   "maxRepairRounds": 2
 }
 ```
 
-Commands run at the canonical Git root. Do not put tokens or other secrets in a
-command string: receipts retain commands for auditability. `failureLog` is
-context, never reproduction evidence, and is persisted only as a digest.
+字段说明：
 
-## Result examples
+| 字段 | 含义 |
+| --- | --- |
+| `task` | writer Agent 收到的修复目标 |
+| `failureLog` | 可选上下文，不参与 RED 判定，Receipt 只保留摘要 |
+| `repro.command` | 插件实际执行的复现命令 |
+| `repro.failure.exitCodes` | 被视为原始故障的退出码；省略时要求非零 |
+| `repro.failure.outputIncludes` | 必须全部出现的大小写敏感文本，至少一条 |
+| `repro.success` | 修复后复现命令的 GREEN 判定，默认退出码为 `0` |
+| `acceptance` | 修复后额外执行的验收命令，最多 10 条 |
+| `maxRepairRounds` | writer 最大轮数，范围 `1-3`，默认 `1` |
 
-The model receives structured JSON; the full canonical receipt remains in the
-Session log. Representative summaries follow.
+## 返回状态
 
-### Fixed
+| 状态 | 含义 |
+| --- | --- |
+| `fixed` | 已精确复现，补丁通过复现与全部验收，验证期间补丁未变化 |
+| `not_reproduced` | 当前命令结果没有匹配声明的失败特征，没有启动 writer |
+| `blocked_dirty_workspace` | 启动时工作区不干净，没有运行复现命令 |
+| `blocked_repro_side_effect` | 复现后工作区发生变化，没有启动 writer |
+| `blocked_active_run` | 当前 Session 已经有一个 ReproFix 任务 |
+| `repair_failed` | writer 没有产出可验证补丁或 Workflow 失败 |
+| `validation_failed` | 已有补丁，但复现、验收或补丁指纹检查失败 |
+| `cancelled` | 外部取消或命令执行被中止 |
 
-```json
-{
-  "ok": true,
-  "status": "fixed",
-  "summary": "Exact failure reproduced; wrapper-owned reproduction and 2 acceptance checks passed.",
-  "attempts": 1,
-  "residualRisks": []
-}
-```
+只有 `fixed` 会返回 `ok: true`。
 
-### Not reproduced
+## 机械保证
 
-The command failed, but its output did not contain every declared literal, so no
-writer was started:
+以下行为由代码执行，不依赖 writer 的自然语言声明：
 
-```json
-{
-  "ok": false,
-  "status": "not_reproduced",
-  "summary": "The current command result did not match the declared failure signature.",
-  "attempts": 0,
-  "residualRisks": ["No source changes were attempted."]
-}
-```
+- dirty 工作区不会启动复现或 writer。
+- 截断、超时、取消、Sandbox 拒绝或未启动的命令不能成为 RED/GREEN。
+- RED 必须同时满足退出码规则和全部文本规则。
+- RED 之前，`write`、`edit`、`bash`、`pwsh` 及未知工具均被 Guard 拒绝。
+- GREEN 由插件重新运行，不采信 writer 声称“测试已通过”。
+- tracked diff 与 untracked 文件共同进入版本化补丁指纹。
+- 最终验证改变补丁时，任务不能返回 `fixed`。
+- 每个终态都会写入 `reprofix/receipt`，包括失败和取消。
 
-### Dirty workspace
+命令输出每个流最多保留 256 KiB。任何截断都会导致匹配失败，而不是用不完整输出
+推断成功。
 
-Tracked or untracked user work exists at startup:
+## 当前安全边界
 
-```json
-{
-  "ok": false,
-  "status": "blocked_dirty_workspace",
-  "summary": "ReproFix requires a clean tracked and untracked Git baseline.",
-  "attempts": 0,
-  "residualRisks": ["Existing workspace changes were preserved."]
-}
-```
+ReproFix 限制了 writer 的启动时机，但它不是完整的命令隔离系统：
 
-### Validation failed
+- `repro.command` 和 `acceptance.command` 是调用方提供的真实 Shell 命令，只能使用
+  你信任的命令。
+- 复现命令先执行，插件随后检查工作区是否变化。如果该命令修改或删除文件，插件会
+  返回 `blocked_repro_side_effect`，但当前版本不会自动恢复这些改动。
+- 活跃任务锁目前按 Session 生效，不是按 Git 工作区全局生效。不要让多个 Session
+  同时修复同一个仓库。
+- writer 被明确提示不要执行 commit、push、reset、checkout 或 clean，但当前版本尚未
+  对所有此类 Shell 命令做机械拦截。
+- Git ignored 文件、仓库外文件、网络请求和远端副作用不在补丁指纹内。
+- Receipt 保存命令文本。不要把 Token、密码或其他秘密直接写入命令。
 
-A patch exists, but post-fix reproduction, an acceptance command, or the final
-fingerprint check failed:
+建议先在临时分支、临时 worktree 或可丢弃仓库中使用，并在运行后检查 `git diff`
+和 `git status`。
 
-```json
-{
-  "ok": false,
-  "status": "validation_failed",
-  "summary": "The final patch did not pass wrapper-owned validation.",
-  "attempts": 2,
-  "residualRisks": ["The writer patch remains in the worktree for inspection."]
-}
-```
+## Receipt 与补丁信息
 
-## Receipt and patch score
+`reprofix/receipt` 使用 `reprofix.receipt/v1`，记录：
 
-`reprofix/run-state` records each transition. `reprofix/receipt` stores the
-canonical `reprofix.receipt/v1` JSON with command digests and bounded output
-tails. See `docs/receipt-schema.md`.
+- Git 根目录、初始 HEAD 和 clean 状态；
+- 复现命令的退出码、耗时、输出摘要和尾部；
+- writer 的诊断与代码位置；
+- changed files、增删行、manifest/binary 文件和补丁指纹；
+- 每条最终验证命令；
+- Workflow 轮次、终止原因和剩余风险。
 
-The reported score observes one final patch:
+补丁分数为：
 
 ```text
-added + deleted + 10 * changed files + 50 * manifest files + 100 * binary files
+added + deleted + 10 × changed files + 50 × manifest files + 100 × binary files
 ```
 
-It does **not** compare multiple candidates and does not claim that a globally
-minimal passing patch was selected.
+它只描述当前补丁的修改规模，不证明该补丁是所有方案中的全局最小值。
 
-## Compatibility
+完整字段见 [Receipt Schema](docs/receipt-schema.md)。
 
-| DSH mode/version | Status | Notes |
-| --- | --- | --- |
-| Native Tool mode, `0.1.0-rc.6` | Supported | Exact standalone dependencies; ReproFix preset mounts standard coding tools and one workflow worker. |
-| Fixed source commit `47f9438` / rc.5 | API reference | Verified source baseline, but rc.5 is not npm-published for independent installation. |
-| Code Mode / `run_code` | Unsupported | No published Code preset until a real mounted DSH smoke proves nested write and shell dispatch are denied before exact RED. |
-| Older `ctx.workflows` / unscoped `cordis` plugins | Unsupported | Obsolete scaffold APIs are intentionally not carried forward. |
+## 代码结构
 
-## Development
+| 路径 | 职责 |
+| --- | --- |
+| `src/index.ts` | 注册 `repair_failure` 工具及输入/输出 Schema |
+| `src/repair.ts` | RED、writer、GREEN 和终态编排 |
+| `src/guard.ts` | 在 RED 前锁定写入与 Shell 工具 |
+| `src/runner.ts` | DSH Shell 调用、Git clean 检查和补丁指纹 |
+| `src/workflow.ts` | 单 writer Workflow 与结构化诊断结果 |
+| `src/receipt.ts` | Receipt 指纹与 Markdown 展示 |
+| `client/server.mjs` | 仅本机访问的跨平台启动页面 |
+| `preset/reprofix` | ReproFix Agent Preset |
+| `test` | 单元、集成、Preset、客户端和真实 Git fixture 测试 |
 
-```sh
+## 开发与验证
+
+```bash
+pnpm install --frozen-lockfile --ignore-scripts
 pnpm typecheck
 pnpm test
 pnpm build
@@ -234,25 +304,25 @@ pnpm test:preset-smoke
 pnpm pack:check
 ```
 
-`pack:check` runs `pnpm pack`, installs the generated tarball into a fresh
-temporary project, and imports `dsh-reprofix` through its public export. The
-preset smoke owns real DSH mounting and native guard behavior; unit mocks are not
-a substitute for that check.
+CI 还会在 macOS 和 Windows 上单独运行客户端测试与打包检查。
 
-## Risks and limits
+## 兼容性
 
-- DSH is a Developer Preview; a future tool roster or lifecycle change requires
-  rerunning the preset and pack smoke tests and updating `docs/discovery.md`.
-- Tool classification is fail-closed. New model-facing tools remain denied while
-  locked until explicitly reviewed and tested.
-- Commands use the platform shell service and may not be portable between POSIX
-  shells and PowerShell; callers own command portability.
-- Ignored files are outside the patch fingerprint. Repositories must correctly
-  ignore generated caches and coverage output.
-- A timed-out process must cooperate with the DSH shell adapter's process-tree
-  termination. Host cancellation is reported as `cancelled`, never `fixed`.
-- Code Mode is deliberately unsupported rather than inferred from unit behavior.
+| DSH 模式/版本 | 状态 |
+| --- | --- |
+| Native Tool mode，`0.1.0-rc.6` | 支持 |
+| 固定源码基线 `47f9438` / rc.5 | API 研究基线，不用于独立安装 |
+| Code Mode / `run_code` | 不支持 |
+| 旧版 `ctx.workflows` 或未作用域 Cordis 插件 | 不支持 |
+
+详细 API 核验见 [DSH API Discovery](docs/discovery.md)。
+
+## 项目来源
+
+本项目基于 `omdsh-dev/dsh-inspect` 的提交
+`9876349054f0fec33114f7f594b4901b7e9420f1` 派生，保留其 MIT 声明，但未保留
+原项目的 CHECKUP、FIX 或 REVIEW 产品行为。详情见 [NOTICE.md](NOTICE.md)。
 
 ## License
 
-MIT. See `LICENSE` and `NOTICE.md`.
+[MIT](LICENSE)
