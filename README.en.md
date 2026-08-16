@@ -109,8 +109,8 @@ closed instead of inferring success from incomplete evidence.
 | Session log, persistence, Workflow | RED gate, one writer, wrapper validation |
 | Context compaction and Web UI | Canonical workspace lock and Receipt |
 
-See [Architecture](docs/architecture.md) and [SPEC](SPEC.md) for the detailed
-design.
+See [Architecture](docs/architecture.md), [ADRs](docs/adr/README.md), and
+[SPEC](SPEC.md) for the detailed design.
 
 ## Built-in Agent Presets
 
@@ -234,6 +234,30 @@ pnpm demo:validation-failed
 `fixed` and `validation-failed` invoke the configured model. `not-reproduced`
 stops at the RED gate without a writer round. Each script prints the temporary
 workspace path so the final diff can be inspected.
+
+## A/B Contract Benchmark
+
+The benchmark compares the prompt-only Coding Preset and ReproFix with the same
+model, fixture, and command set. An independent harness reruns the oracle and
+does not trust either Agent's prose.
+
+| Metric | Prompt-only | ReproFix |
+| --- | ---: | ---: |
+| Status accuracy | 87.5% | 100.0% |
+| Contract pass rate | 87.5% | 100.0% |
+| False-fixed / fixed claims | 1 / 2 | 0 / 1 |
+| Pre-RED source mutation / blocked cases | 1 / 5 | 0 / 5 |
+| Mean duration | 87.0s | 16.5s |
+
+The difference occurred in `truncated-evidence`: prompt-only continued from
+incomplete output, modified source, and reported `fixed`; ReproFix returned
+`not_reproduced` without starting the writer.
+
+This is an exploratory `8 scenarios x 1 trial` contract benchmark, not a claim
+about general repair capability or statistical significance. See
+[benchmark](benchmark/README.md) for the reproducible method and
+[raw results](benchmark/results/2026-08-17-traex-gpt-5.6-sol-max.md) for every
+run.
 
 ## Install into DSH Web
 
@@ -385,6 +409,8 @@ See [Receipt Schema](docs/receipt-schema.md) for every field.
 | `client/cli.mjs` | `dshagent` arguments, confirmation, timeout, and DSH child management |
 | `client/server.mjs` | Loopback-only cross-platform browser launcher |
 | `preset/coding` / `preset/reprofix` | The two Agent Presets |
+| `benchmark` | Prompt-only / ReproFix A/B contract benchmark and raw results |
+| `docs/adr` | Accepted architecture decisions and implementation evidence |
 | `test` | Unit, integration, Preset, client, and real Git fixture tests |
 
 ## Development and Verification

@@ -86,7 +86,8 @@ repair_failure
 | Session 日志、持久化、Workflow | RED gate、单 writer、wrapper validation |
 | 上下文压缩与 Web UI | canonical workspace lock 与 Receipt |
 
-详细设计见 [Architecture](docs/architecture.md) 和 [SPEC](SPEC.md)。
+详细设计见 [Architecture](docs/architecture.md)、[ADR](docs/adr/README.md)
+和 [SPEC](SPEC.md)。
 
 ## 内置 Agent Preset
 
@@ -202,6 +203,26 @@ pnpm demo:validation-failed
 
 `fixed` 和 `validation-failed` 会调用已配置的模型;`not-reproduced` 在 RED gate
 直接结束,不产生模型修复轮次。脚本会打印临时工作区路径,便于检查最终 diff。
+
+## A/B 合同评测
+
+同一模型、同一 fixture、同一命令集下，对比仅靠 Prompt 约束的 Coding Preset 与
+ReproFix。独立 harness 会重新执行 oracle，不能采信任一 Agent 的文字结论。
+
+| 指标 | Prompt-only | ReproFix |
+| --- | ---: | ---: |
+| 状态准确率 | 87.5% | 100.0% |
+| 合同通过率 | 87.5% | 100.0% |
+| False-fixed / fixed claims | 1 / 2 | 0 / 1 |
+| RED 前违规源码修改 / 阻断场景 | 1 / 5 | 0 / 5 |
+| 平均耗时 | 87.0s | 16.5s |
+
+差异发生在 `truncated-evidence`：Prompt-only 从不完整输出继续修改并报告
+`fixed`；ReproFix 返回 `not_reproduced`，未启动 writer。
+
+这是 `8 scenarios × 1 trial` 的探索性合同评测，不代表通用修复能力或统计显著性。
+完整方法、逐条证据和可复跑命令见 [benchmark](benchmark/README.md) 与
+[原始结果](benchmark/results/2026-08-17-traex-gpt-5.6-sol-max.md)。
 
 ## 安装到已有 DSH Web
 
@@ -349,6 +370,8 @@ added + deleted + 10 × changed files + 50 × manifest files + 100 × binary fil
 | `client/cli.mjs` | `dshagent` 参数、确认、timeout 与 DSH 子进程管理 |
 | `client/server.mjs` | 仅本机访问的跨平台启动页面 |
 | `preset/coding` / `preset/reprofix` | 两套 Agent Preset |
+| `benchmark` | Prompt-only / ReproFix A/B 合同评测与原始结果 |
+| `docs/adr` | 已接受架构决策及其代码证据 |
 | `test` | 单元、集成、Preset、客户端和真实 Git fixture 测试 |
 
 ## 开发与验证

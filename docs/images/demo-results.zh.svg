@@ -29,7 +29,7 @@
   <text x="76" y="436" fill="#6f8199" font-family="SFMono-Regular,Consolas,'Liberation Mono',monospace" font-size="13">✓ reprofix/receipt 已写入</text>
 
   <rect x="76" y="458" width="1048" height="42" rx="7" fill="#0f1724" stroke="#35445a"/>
-  <text x="108" y="485" fill="#64d39b" font-family="'PingFang SC','Hiragino Sans GB','Microsoft YaHei',Arial,sans-serif" font-size="15" font-weight="700">89 单元</text>
+  <text x="108" y="485" fill="#64d39b" font-family="'PingFang SC','Hiragino Sans GB','Microsoft YaHei',Arial,sans-serif" font-size="15" font-weight="700">93 单元</text>
   <text x="220" y="485" fill="#8da2bd" font-family="SFMono-Regular,Consolas,'Liberation Mono',monospace" font-size="15">|</text>
   <text x="260" y="485" fill="#64d39b" font-family="'PingFang SC','Hiragino Sans GB','Microsoft YaHei',Arial,sans-serif" font-size="15" font-weight="700">24 集成</text>
   <text x="372" y="485" fill="#8da2bd" font-family="SFMono-Regular,Consolas,'Liberation Mono',monospace" font-size="15">|</text>

@@ -12,6 +12,9 @@ commands, compares patch state, checks HEAD, and scores the reported status.
 
 Published exploratory result:
 [traex/gpt-5.6-sol-max, 8 scenarios x 1 trial](results/2026-08-17-traex-gpt-5.6-sol-max.md).
+The published run configured the Traex headless adapter as `workspace-write`
+to match DSH's workspace policy; Traex built-in Shell remained disabled and all
+actions used DSH tools.
 
 ## Metrics
 
