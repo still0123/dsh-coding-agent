@@ -171,8 +171,9 @@ Not a fit:
 The CLI uses DSH's `headless` Profile. If the selected default model comes from
 a third-party provider installed only in the Web Profile, configure the same
 adapter in `$DSH_HOME/profiles/headless/cordis.patch.yml`. The CLI does not
-implicitly copy Web plugins into headless. With no adapter, `run` fails clearly
-and ReproFix returns a Receipt-backed `infrastructure_error` after RED.
+implicitly copy Web plugins into headless. With no adapter, `run` fails clearly, and
+`repair_failure` fails fast with a Receipt-backed `infrastructure_error` before the
+transaction starts, without running the reproduction command.
 
 ## Install the Release
 

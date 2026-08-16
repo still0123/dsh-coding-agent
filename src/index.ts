@@ -194,7 +194,7 @@ export function apply(ctx: Context): void {
           activeRuns,
           workspaceLock,
           runWriter,
-          prepareWriter: () => {
+          prepareRun: () => {
             const provider = agent.options.provider
             if (!provider || ctx.llm.listProviders().some((entry) => entry.id === provider)) return
             throw new Error(

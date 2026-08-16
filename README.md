@@ -146,8 +146,9 @@ repair_failure
 CLI 使用 DSH 的 `headless` Profile。若默认模型来自 Web Profile 单独安装的第三方
 provider,必须把同一 adapter 配置到
 `$DSH_HOME/profiles/headless/cordis.patch.yml`;CLI 不会把 Web 插件隐式复制到
-headless。缺少 adapter 时,`run` 明确失败,ReproFix 在 RED 后返回带 Receipt 的
-`infrastructure_error`。
+headless。缺少 adapter 时,`run` 明确失败;`repair_failure` 会在事务开始前检查
+provider 并直接返回带 Receipt 的 `infrastructure_error`(fail-fast),不运行复现
+命令。
 
 ## 安装 Release
 

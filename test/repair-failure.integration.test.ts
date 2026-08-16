@@ -76,7 +76,7 @@ function dependencies(options: {
   commands?: CommandEvidence[]
   heads?: string[]
   patches?: PatchSummary[]
-  prepareWriter?: RepairDependencies['prepareWriter']
+  prepareRun?: RepairDependencies['prepareRun']
   reportError?: RepairDependencies['reportError']
   writers?: Array<WriterResult | null>
 }) {
@@ -104,7 +104,7 @@ function dependencies(options: {
     git,
     activeRuns: new InMemoryActiveRunRegistry(),
     runWriter,
-    ...(options.prepareWriter === undefined ? {} : { prepareWriter: options.prepareWriter }),
+    ...(options.prepareRun === undefined ? {} : { prepareRun: options.prepareRun }),
     ...(options.reportError === undefined ? {} : { reportError: options.reportError }),
     runId: () => 'run-1',
     now: () => new Date('2026-08-16T00:00:00.000Z'),
@@ -334,12 +334,9 @@ describe('repair_failure transaction', () => {
     })
   })
 
-  it('reports a missing writer model adapter after RED as infrastructure_error', async () => {
+  it('reports a missing writer model adapter before any command or Git access', async () => {
     const deps = dependencies({
-      commands: [
-        evidence('pnpm test repro', { exitCode: 1, combinedOutput: 'expected 4, received 3\n' }),
-      ],
-      prepareWriter: () => { throw new Error('No LLM adapter for provider "missing"') },
+      prepareRun: () => { throw new Error('No LLM adapter for provider "missing"') },
       writers: [writer],
     })
     const result = await executeRepairFailure({
@@ -348,6 +345,8 @@ describe('repair_failure transaction', () => {
 
     expect(result.status).toBe('infrastructure_error')
     expect(result.residualRisks).toContain('No LLM adapter for provider "missing"')
+    expect(deps.git.baseline).not.toHaveBeenCalled()
+    expect(deps.commandRunner.run).not.toHaveBeenCalled()
     expect(deps.runWriter).not.toHaveBeenCalled()
   })
 

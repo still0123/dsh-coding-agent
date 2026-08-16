@@ -53,7 +53,7 @@ export interface RepairDependencies {
   git: GitAdapter
   activeRuns: ActiveRunRegistry
   workspaceLock?: WorkspaceLock
-  prepareWriter?: () => Promise<void> | void
+  prepareRun?: () => Promise<void> | void
   maxOutputBytes?: number
   runWriter?: typeof runWriterWorkflow
   now?: () => Date
@@ -230,6 +230,8 @@ export async function executeRepairFailure(input: {
   try {
     appendState('created')
     if (signal.aborted) return finish('cancelled')
+    await dependencies.prepareRun?.()
+    if (signal.aborted) return finish('cancelled')
 
     const baseline = await dependencies.git.baseline(cwd)
     context.baseline = baseline
@@ -288,8 +290,6 @@ export async function executeRepairFailure(input: {
     }
 
     appendState('reproduced')
-    await dependencies.prepareWriter?.()
-    if (signal.aborted) return finish('cancelled')
     const writer = dependencies.runWriter ?? runWriterWorkflow
     let previousValidation: CommandEvidence[] | undefined
 
