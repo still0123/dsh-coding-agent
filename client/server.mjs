@@ -313,11 +313,31 @@ function usage() {
   return 'Usage: dsh-reprofix-client [--port <number>] [--no-open]\n'
 }
 
-async function openBrowser(url) {
-  const command = process.platform === 'win32' ? 'cmd.exe' : process.platform === 'darwin' ? 'open' : 'xdg-open'
-  const args = process.platform === 'win32' ? ['/d', '/s', '/c', 'start', '', url] : [url]
-  const child = spawn(command, args, { detached: true, stdio: 'ignore', windowsHide: true })
-  child.unref()
+export async function openBrowser(url, platform = process.platform, spawnProcess = spawn) {
+  const command = platform === 'win32' ? 'cmd.exe' : platform === 'darwin' ? 'open' : 'xdg-open'
+  const args = platform === 'win32' ? ['/d', '/s', '/c', 'start', '', url] : [url]
+  try {
+    const child = spawnProcess(command, args, {
+      detached: true,
+      shell: false,
+      stdio: 'ignore',
+      windowsHide: true,
+    })
+    child.unref?.()
+    return await new Promise(resolvePromise => {
+      const finish = (opened) => {
+        child.off('error', onError)
+        child.off('spawn', onSpawn)
+        resolvePromise(opened)
+      }
+      const onError = () => finish(false)
+      const onSpawn = () => finish(true)
+      child.once('error', onError)
+      child.once('spawn', onSpawn)
+    })
+  } catch {
+    return false
+  }
 }
 
 async function main() {
@@ -332,7 +352,9 @@ async function main() {
   const client = await createLocalClient()
   const url = await client.listen(port)
   process.stdout.write(`ReproFix Local: ${url}\nPress Ctrl+C to stop.\n`)
-  if (!args.includes('--no-open')) await openBrowser(url)
+  if (!args.includes('--no-open') && !(await openBrowser(url))) {
+    process.stderr.write(`Could not open a browser; open ${url} manually.\n`)
+  }
   const shutdown = async () => { await client.close(); process.exit(0) }
   process.once('SIGINT', shutdown)
   process.once('SIGTERM', shutdown)

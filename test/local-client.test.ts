@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
-import { buildPrompt, createLocalClient, dshLaunch, validHost, waitForSettlement } from '../client/server.mjs'
+import { buildPrompt, createLocalClient, dshLaunch, openBrowser, validHost, waitForSettlement } from '../client/server.mjs'
 import { apply as applyClientScope, mountReproFix } from '../src/client-scope.js'
 
 class FakeChild extends EventEmitter {
@@ -113,6 +113,44 @@ describe('local client', () => {
       prefixArgs: ['C:\\app\\dsh\\lib\\bin.js'],
     })
     expect(() => dshLaunch(undefined, 'win32')).toThrow(/Windows requires @deepseek-ai\/dsh/)
+  })
+
+  it.each([
+    ['darwin', 'open', ['http://127.0.0.1:4317/']],
+    ['linux', 'xdg-open', ['http://127.0.0.1:4317/']],
+    ['win32', 'cmd.exe', ['/d', '/s', '/c', 'start', '', 'http://127.0.0.1:4317/']],
+  ])('opens the browser on %s without a command shell', async (platform, command, args) => {
+    const child = new EventEmitter() as EventEmitter & { unref: ReturnType<typeof vi.fn> }
+    child.unref = vi.fn()
+    const spawnProcess = vi.fn(() => {
+      queueMicrotask(() => child.emit('spawn'))
+      return child as never
+    })
+
+    await expect(openBrowser('http://127.0.0.1:4317/', platform, spawnProcess)).resolves.toBe(true)
+    expect(spawnProcess).toHaveBeenCalledWith(command, args, {
+      detached: true,
+      shell: false,
+      stdio: 'ignore',
+      windowsHide: true,
+    })
+    expect(child.unref).toHaveBeenCalledTimes(1)
+  })
+
+  it('contains synchronous and asynchronous browser launcher failures', async () => {
+    await expect(openBrowser('http://127.0.0.1:4317/', 'linux', () => {
+      throw new Error('spawn exploded')
+    })).resolves.toBe(false)
+
+    const child = new EventEmitter() as EventEmitter & { unref: ReturnType<typeof vi.fn> }
+    child.unref = vi.fn()
+    const spawnProcess = vi.fn(() => {
+      queueMicrotask(() => child.emit('error', new Error('xdg-open missing')))
+      return child as never
+    })
+    await expect(openBrowser('http://127.0.0.1:4317/', 'linux', spawnProcess)).resolves.toBe(false)
+    expect(child.listenerCount('error')).toBe(0)
+    expect(child.listenerCount('spawn')).toBe(0)
   })
 
   it('removes its generated patch when Windows launch discovery fails', async () => {
