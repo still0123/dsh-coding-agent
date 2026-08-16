@@ -1,36 +1,36 @@
-# dsh-coding-agent
+# DSH Coding Agent
 
 [![CI](https://github.com/still0123/dsh-coding-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/still0123/dsh-coding-agent/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/still0123/dsh-coding-agent?display_name=tag)](https://github.com/still0123/dsh-coding-agent/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![DSH](https://img.shields.io/badge/DeepSeek%20Harness-0.1.0--rc.6-4e51e8)](https://github.com/deepseek-ai/deepseek-harness)
 
-**一个基于 DeepSeek Harness / Cordis 的 Coding Agent 发行层，提供通用编码模式和
-严格的 ReproFix 修复模式。**
+![DSH Coding Agent banner](docs/images/readme-banner.svg)
 
-本项目不重写 DSH 的 Agent Loop、模型适配、Session、Sandbox 或持久化。它通过
-Agent Preset 组合 DSH 能力，并自主实现 ReproFix：只有当前机器上的真实失败被精确
-复现后，才允许唯一 writer 修改代码。
+基于 DeepSeek Harness / Cordis 的 Coding Agent 发行层，提供通用 Coding Preset
+与严格的 ReproFix 修复模式。
 
-ReproFix 把修复过程变成一个受控流程：
+> **可审计执行合同：** 修改前观察到用户声明的失败；只有 RED 匹配后才开放唯一
+> writer；wrapper 对最终补丁重新执行全部后置条件；全部通过才返回 `fixed`。
 
-```text
-获取 canonical Git root 的跨进程锁并检查 HEAD/clean
-        ↓
-运行用户在 CLI 边界确认的复现命令
-        ↓
-退出码 + 失败文本精确匹配（RED）
-        ↓
-只向一个 writer 开放 read/search/edit/write（无 Shell）
-        ↓
-插件重新运行复现命令和全部验收命令（GREEN）
-        ↓
-确认 HEAD 和验证前后的补丁指纹没有变化
-        ↓
-写入可审计的 Session Receipt
-```
+项目不重写 DSH 的 Agent Loop、模型适配、Session、Sandbox 或持久化。它只在 DSH
+扩展点上实现 Preset、CLI 授权边界、ReproFix Guard、状态机和 Receipt。
 
 > [!IMPORTANT]
 > 当前稳定版本为 `0.1.0`，通过 GitHub Releases 分发；尚未发布到 npm registry。
+
+## 架构与所有权
+
+![DSH Coding Agent architecture](docs/images/architecture.svg)
+
+| DSH 提供 | 本项目实现 |
+| --- | --- |
+| Agent Loop、模型适配、工具运行时 | `coding` / `reprofix` Agent Preset |
+| ALLOW / ASK / DENY、Sandbox、Shell | `repair.json` CLI 授权与 fingerprint |
+| Session 日志、持久化、Workflow | RED gate、单 writer、wrapper validation |
+| 上下文压缩与 Web UI | canonical workspace lock 与 Receipt |
+
+详细设计见 [Architecture](docs/architecture.md) 和 [SPEC](SPEC.md)。
 
 ## 内置 Agent Preset
 
@@ -140,6 +140,8 @@ ID 或 resume；这些能力计划在 V0.2 加入。
 ## 一键 Demo
 
 每个 Demo 都会把 `fixtures/buggy-project` 复制到新的临时 Git 仓库，并断言最终状态：
+
+![Verified ReproFix demo outcomes](docs/images/demo-results.svg)
 
 ```bash
 pnpm demo:not-reproduced

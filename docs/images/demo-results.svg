@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="560" viewBox="0 0 1200 560" role="img" aria-labelledby="title desc">
+  <title id="title">Verified ReproFix demo outcomes</title>
+  <desc id="desc">Three real fixture demos end as not reproduced, fixed, and validation failed. The repository also passes unit, integration, preset smoke, Linux, macOS, and Windows checks.</desc>
+  <rect width="1200" height="560" fill="#101827"/>
+  <rect x="38" y="34" width="1124" height="492" rx="8" fill="#151f30" stroke="#35445a" stroke-width="2"/>
+  <circle cx="72" cy="67" r="7" fill="#e25b55"/>
+  <circle cx="96" cy="67" r="7" fill="#e0a52e"/>
+  <circle cx="120" cy="67" r="7" fill="#42b883"/>
+  <text x="600" y="74" text-anchor="middle" fill="#9fb0c7" font-family="SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="15">verified fixture runs</text>
+
+  <text x="76" y="134" fill="#8da2bd" font-family="SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="18">$ pnpm demo:not-reproduced</text>
+  <rect x="760" y="105" width="330" height="48" rx="7" fill="#2b2530" stroke="#d59224"/>
+  <text x="925" y="136" text-anchor="middle" fill="#f2bd56" font-family="SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="17" font-weight="700">not_reproduced</text>
+  <text x="76" y="170" fill="#c3cfdd" font-family="SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="15">signature mismatch -> writer never starts</text>
+
+  <line x1="76" y1="205" x2="1124" y2="205" stroke="#2e3b4f"/>
+  <text x="76" y="258" fill="#8da2bd" font-family="SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="18">$ pnpm demo:fixed</text>
+  <rect x="760" y="229" width="330" height="48" rx="7" fill="#193329" stroke="#20a36a"/>
+  <text x="925" y="260" text-anchor="middle" fill="#64d39b" font-family="SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="17" font-weight="700">fixed</text>
+  <text x="76" y="294" fill="#c3cfdd" font-family="SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="15">one file, +1 / -1 -> post-fix reproduction PASS</text>
+
+  <line x1="76" y1="329" x2="1124" y2="329" stroke="#2e3b4f"/>
+  <text x="76" y="382" fill="#8da2bd" font-family="SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="18">$ pnpm demo:validation-failed</text>
+  <rect x="760" y="353" width="330" height="48" rx="7" fill="#382326" stroke="#d64545"/>
+  <text x="925" y="384" text-anchor="middle" fill="#f07d78" font-family="SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="17" font-weight="700">validation_failed</text>
+  <text x="76" y="418" fill="#c3cfdd" font-family="SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="15">patch passes repro, deliberate acceptance exits 7</text>
+
+  <rect x="76" y="458" width="1048" height="42" rx="7" fill="#0f1724" stroke="#35445a"/>
+  <text x="108" y="485" fill="#64d39b" font-family="SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="15" font-weight="700">89 unit</text>
+  <text x="264" y="485" fill="#8da2bd" font-family="SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="15">|</text>
+  <text x="298" y="485" fill="#64d39b" font-family="SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="15" font-weight="700">24 integration</text>
+  <text x="480" y="485" fill="#8da2bd" font-family="SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="15">|</text>
+  <text x="514" y="485" fill="#64d39b" font-family="SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="15" font-weight="700">2 preset smoke</text>
+  <text x="692" y="485" fill="#8da2bd" font-family="SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="15">|</text>
+  <text x="726" y="485" fill="#c3cfdd" font-family="SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="15">Linux</text>
+  <text x="815" y="485" fill="#c3cfdd" font-family="SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="15">macOS</text>
+  <text x="914" y="485" fill="#c3cfdd" font-family="SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="15">Windows</text>
+</svg>
