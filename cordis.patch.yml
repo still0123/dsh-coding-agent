@@ -1,0 +1,4 @@
+# ReproFix is intentionally not mounted on the host plane. Install the package,
+# then register/copy preset/reprofix as an Agent Preset so its guard is scoped to
+# that preset's agent context.
+[]

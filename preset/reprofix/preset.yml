@@ -1,0 +1,3 @@
+name: ReproFix
+description: 先精确复现，再由单一写 Agent 最小修复，并由插件独立验收。
+order: 20
