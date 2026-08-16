@@ -41,7 +41,9 @@ export function parseArgs(args) {
   const selected = []
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index]
-    if (arg === '--trials') {
+    if (arg === '--') {
+      continue
+    } else if (arg === '--trials') {
       trials = Number(valueAfter(args, index, arg))
       index += 1
     } else if (arg === '--scenario') {

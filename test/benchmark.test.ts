@@ -87,7 +87,7 @@ describe('A/B benchmark scoring', () => {
   })
 
   it('validates benchmark command options', () => {
-    expect(parseArgs(['--trials', '2', '--scenario', 'real-fix', '--arm', 'reprofix']))
+    expect(parseArgs(['--', '--trials', '2', '--scenario', 'real-fix', '--arm', 'reprofix']))
       .toMatchObject({ trials: 2, arm: 'reprofix', selected: ['real-fix'] })
     expect(() => parseArgs(['--trials', '0'])).toThrow(/1 to 20/)
     expect(() => parseArgs(['--scenario', 'missing'])).toThrow(/unknown scenario/)
