@@ -220,6 +220,7 @@ export async function executeRepairFailure(input: {
 
     const baseline = await dependencies.git.baseline(cwd)
     context.baseline = baseline
+    if (signal.aborted) return finish('cancelled')
     if (!baseline.clean) return finish('blocked_dirty_workspace')
 
     const priorStates = foldRunStates(
@@ -249,7 +250,9 @@ export async function executeRepairFailure(input: {
     checks.push(toCheck(reproduction, 'reproduction', 'declared reproduction', reproduced))
     if (signal.aborted || reproduction.aborted) return finish('cancelled')
     if (!reproduced) return finish('not_reproduced')
-    if (!(await dependencies.git.isClean(baseline.workspaceRoot))) return finish('blocked_repro_side_effect')
+    const cleanAfterReproduction = await dependencies.git.isClean(baseline.workspaceRoot)
+    if (signal.aborted) return finish('cancelled')
+    if (!cleanAfterReproduction) return finish('blocked_repro_side_effect')
 
     appendState('reproduced')
     const writer = dependencies.runWriter ?? runWriterWorkflow
@@ -294,6 +297,7 @@ export async function executeRepairFailure(input: {
       context.residualRisks = attempt.writer.residualRisks
       const patch = await dependencies.git.patch(baseline.workspaceRoot, round)
       context.patch = patch
+      if (signal.aborted) return finish('cancelled')
       if (patch.changedFiles.length === 0) return finish('repair_failed')
 
       appendState('validating', round)
@@ -328,8 +332,9 @@ export async function executeRepairFailure(input: {
       if (signal.aborted || validation.some((item) => item.aborted)) return finish('cancelled')
 
       const afterPatch = await dependencies.git.patch(baseline.workspaceRoot, round)
-      if (afterPatch.fingerprint !== beforeFingerprint) passed = false
       context.patch = afterPatch
+      if (signal.aborted) return finish('cancelled')
+      if (afterPatch.fingerprint !== beforeFingerprint) passed = false
       if (passed) return finish('fixed')
       previousValidation = validation
     }

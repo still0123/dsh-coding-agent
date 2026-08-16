@@ -312,4 +312,75 @@ describe('repair_failure transaction', () => {
     expect(result.status).toBe('cancelled')
     expect(deps.commandRunner.run).not.toHaveBeenCalled()
   })
+
+  it('returns cancelled when the host aborts during Git baseline discovery', async () => {
+    const controller = new AbortController()
+    const deps = dependencies({ clean: false })
+    vi.mocked(deps.git.baseline).mockImplementationOnce(async () => {
+      controller.abort('user')
+      return { workspaceRoot: '/repo', head: 'abc', clean: false }
+    })
+
+    const result = await executeRepairFailure({
+      args: args(), agent: agent(), toolCallId: 'call-1', signal: controller.signal, dependencies: deps,
+    })
+    expect(result.status).toBe('cancelled')
+    expect(deps.commandRunner.run).not.toHaveBeenCalled()
+  })
+
+  it('returns cancelled when the host aborts during the post-reproduction clean check', async () => {
+    const controller = new AbortController()
+    const deps = dependencies({
+      commands: [evidence('pnpm test repro', { exitCode: 1, combinedOutput: 'expected 4, received 3\n' })],
+    })
+    vi.mocked(deps.git.isClean).mockImplementationOnce(async () => {
+      controller.abort('user')
+      return false
+    })
+
+    const result = await executeRepairFailure({
+      args: args(), agent: agent(), toolCallId: 'call-1', signal: controller.signal, dependencies: deps,
+    })
+    expect(result.status).toBe('cancelled')
+    expect(deps.runWriter).not.toHaveBeenCalled()
+  })
+
+  it('returns cancelled when the host aborts while reading the writer patch', async () => {
+    const controller = new AbortController()
+    const deps = dependencies({
+      commands: [evidence('pnpm test repro', { exitCode: 1, combinedOutput: 'expected 4, received 3\n' })],
+      writers: [writer],
+    })
+    vi.mocked(deps.git.patch).mockImplementationOnce(async () => {
+      controller.abort('user')
+      return { ...patch(1), changedFiles: [] }
+    })
+
+    const result = await executeRepairFailure({
+      args: args(), agent: agent(), toolCallId: 'call-1', signal: controller.signal, dependencies: deps,
+    })
+    expect(result.status).toBe('cancelled')
+  })
+
+  it('returns cancelled when the host aborts during the final patch fingerprint read', async () => {
+    const controller = new AbortController()
+    const deps = dependencies({
+      commands: [
+        evidence('pnpm test repro', { exitCode: 1, combinedOutput: 'expected 4, received 3\n' }),
+        evidence('pnpm test repro'), evidence('pnpm test'), evidence('pnpm typecheck'),
+      ],
+      patches: [patch(1)],
+      writers: [writer],
+    })
+    vi.mocked(deps.git.patch).mockImplementationOnce(async (_root, revision) => patch(revision))
+      .mockImplementationOnce(async (_root, revision) => {
+        controller.abort('user')
+        return patch(revision)
+      })
+
+    const result = await executeRepairFailure({
+      args: args(), agent: agent(), toolCallId: 'call-1', signal: controller.signal, dependencies: deps,
+    })
+    expect(result.status).toBe('cancelled')
+  })
 })
