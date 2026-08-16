@@ -371,6 +371,23 @@ describe('repair_failure transaction', () => {
     })
   })
 
+  it('skips remaining acceptance commands when stopOnFirstValidationFailure is set', async () => {
+    const deps = dependencies({
+      commands: [
+        evidence('pnpm test repro', { exitCode: 1, combinedOutput: 'expected 4, received 3\n' }),
+        evidence('pnpm test repro', { exitCode: 1, combinedOutput: 'still failing\n' }),
+      ],
+      writers: [writer],
+    })
+    const result = await executeRepairFailure({
+      args: { ...args(), stopOnFirstValidationFailure: true },
+      agent: agent(), toolCallId: 'call-1', signal: new AbortController().signal, dependencies: deps,
+    })
+
+    expect(result.status).toBe('validation_failed')
+    expect(deps.commandRunner.run).toHaveBeenCalledTimes(2)
+  })
+
   it('releases the active claim when the first state append fails', async () => {
     const reportError = vi.fn()
     const deps = dependencies({ reportError })

@@ -335,7 +335,8 @@ Agent.
       "command": "pnpm test"
     }
   ],
-  "maxRepairRounds": 2
+  "maxRepairRounds": 2,
+  "stopOnFirstValidationFailure": false
 }
 ```
 
@@ -349,6 +350,7 @@ Agent.
 | `repro.success` | GREEN expectation for the post-fix reproduction; defaults to exit code `0` |
 | `acceptance` | Additional post-fix commands, at most 10 |
 | `maxRepairRounds` | Writer round limit, `1-3`, default `1` |
+| `stopOnFirstValidationFailure` | Skip remaining acceptance commands after the first validation failure to save time at the cost of incomplete receipt evidence; default `false` runs every command |
 
 ## Current Security Boundary
 

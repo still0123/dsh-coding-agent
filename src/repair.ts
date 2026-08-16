@@ -361,6 +361,7 @@ export async function executeRepairFailure(input: {
 
       for (const [index, acceptance] of args.acceptance.entries()) {
         if (signal.aborted) break
+        if (!passed && args.stopOnFirstValidationFailure) break
         const evidence = await dependencies.commandRunner.run({
           command: acceptance.command,
           cwd: baseline.workspaceRoot,

@@ -29,6 +29,7 @@ export interface RepairFailureInput {
     success?: ExitExpectation
   }>
   maxRepairRounds?: number
+  stopOnFirstValidationFailure?: boolean
 }
 
 export interface NormalizedRepairFailureInput {
@@ -47,6 +48,7 @@ export interface NormalizedRepairFailureInput {
     success: Required<ExitExpectation>
   }>
   maxRepairRounds: number
+  stopOnFirstValidationFailure: boolean
 }
 
 export interface CommandEvidence {
@@ -264,6 +266,9 @@ export function validateRepairFailureInput(value: unknown): NormalizedRepairFail
   }
 
   const failureLog = optionalText(input.failureLog, 'failureLog', 20_000)
+  if (input.stopOnFirstValidationFailure !== undefined && typeof input.stopOnFirstValidationFailure !== 'boolean') {
+    throw new TypeError('stopOnFirstValidationFailure must be a boolean')
+  }
   return {
     task: text(input.task, 'task', 10_000),
     ...(failureLog === undefined ? {} : { failureLog }),
@@ -295,6 +300,7 @@ export function validateRepairFailureInput(value: unknown): NormalizedRepairFail
       input.maxRepairRounds === undefined
         ? 1
         : integer(input.maxRepairRounds, 'maxRepairRounds', 1, 3),
+    stopOnFirstValidationFailure: input.stopOnFirstValidationFailure ?? false,
   }
 }
 

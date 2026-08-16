@@ -170,6 +170,7 @@ export function apply(ctx: Context): void {
         },
       },
       maxRepairRounds: { type: 'integer' },
+      stopOnFirstValidationFailure: { type: 'boolean', description: 'Skip remaining acceptance commands after the first validation failure. Default false keeps complete evidence.' },
     },
     output: {
       schema: RESULT_SCHEMA,

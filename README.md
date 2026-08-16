@@ -298,7 +298,8 @@ Preset,不能全局限制其他 DSH Agent。
       "command": "pnpm test"
     }
   ],
-  "maxRepairRounds": 2
+  "maxRepairRounds": 2,
+  "stopOnFirstValidationFailure": false
 }
 ```
 
@@ -314,6 +315,7 @@ Preset,不能全局限制其他 DSH Agent。
 | `repro.success` | 修复后复现命令的 GREEN 判定,默认退出码为 `0` |
 | `acceptance` | 修复后额外执行的验收命令,最多 10 条 |
 | `maxRepairRounds` | writer 最大轮数,范围 `1-3`,默认 `1` |
+| `stopOnFirstValidationFailure` | 首个验证失败后跳过剩余验收命令,省时间但 Receipt 证据不完整;默认 `false` 跑完全部命令 |
 
 ## 当前安全边界
 

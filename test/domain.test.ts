@@ -57,6 +57,7 @@ describe('validateRepairFailureInput', () => {
       },
       acceptance: [],
       maxRepairRounds: 1,
+      stopOnFirstValidationFailure: false,
     })
   })
 
@@ -125,6 +126,7 @@ describe('validateRepairFailureInput', () => {
     [{ ...validInput, acceptance: [{ command: 'true', timeoutMs: 1.5 }] }, 'timeoutMs'],
     [{ ...validInput, maxRepairRounds: 0 }, 'maxRepairRounds'],
     [{ ...validInput, maxRepairRounds: 4 }, 'maxRepairRounds'],
+    [{ ...validInput, stopOnFirstValidationFailure: 'yes' }, 'stopOnFirstValidationFailure'],
   ])('rejects invalid input %#', (input, message) => {
     expect(() => validateRepairFailureInput(input)).toThrow(message)
   })
