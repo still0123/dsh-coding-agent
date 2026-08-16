@@ -21,11 +21,12 @@ class FakeChild extends EventEmitter {
   exitCode: number | null = null
 }
 
-async function post(url: string, token: string, body: unknown) {
+async function post(url: string, token: string, body: unknown, signal?: AbortSignal) {
   return fetch(new URL('/api/run', url), {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-reprofix-token': token },
     body: JSON.stringify(body),
+    signal,
   })
 }
 
@@ -300,6 +301,47 @@ describe('local client', () => {
     request.destroy()
     await requestDone
     expect(spawnProcess).not.toHaveBeenCalled()
+  })
+
+  it('recovers the active slot after a disconnected client requires SIGKILL', async () => {
+    const firstChild = new FakeChild()
+    firstChild.kill.mockImplementation((signal?: NodeJS.Signals | number) => {
+      if (signal === 'SIGKILL') {
+        firstChild.exitCode = 137
+        queueMicrotask(() => firstChild.emit('close', null))
+      }
+      return true
+    })
+    const secondChild = new FakeChild()
+    const spawnProcess = vi.fn()
+      .mockReturnValueOnce(firstChild as never)
+      .mockReturnValueOnce(secondChild as never)
+    const client = await createLocalClient({
+      token: 'test-token',
+      patch: '/tmp/reprofix-test.yml',
+      launch: { command: process.execPath, prefixArgs: ['/opt/dsh/lib/bin.js'] },
+      shutdownTimeoutMs: 5,
+      spawnProcess,
+    })
+    const url = await client.listen()
+    const input = { task: 'Fix the bug.', repro: { command: 'pnpm test', failure: { outputIncludes: ['failure'] } } }
+    const controller = new AbortController()
+    const disconnectedRun = post(url, 'test-token', { cwd: process.cwd(), input }, controller.signal).catch(() => undefined)
+    await vi.waitFor(() => expect(spawnProcess).toHaveBeenCalledTimes(1))
+
+    controller.abort()
+    await vi.waitFor(() => expect(firstChild.kill.mock.calls.map(call => call[0])).toEqual(['SIGTERM', 'SIGKILL']))
+    await vi.waitFor(async () => {
+      await expect(fetch(new URL('/health', url)).then(item => item.json())).resolves.toEqual({ ok: true, active: false })
+    })
+
+    const secondRun = post(url, 'test-token', { cwd: process.cwd(), input })
+    await vi.waitFor(() => expect(spawnProcess).toHaveBeenCalledTimes(2))
+    secondChild.exitCode = 0
+    secondChild.emit('close', 0)
+    expect((await secondRun).status).toBe(200)
+    await disconnectedRun
+    await client.close()
   })
 
   it('escalates a timed-out shutdown to SIGKILL and shares concurrent close work', async () => {

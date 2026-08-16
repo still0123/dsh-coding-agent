@@ -173,6 +173,7 @@ export async function createLocalClient(options = {}) {
   let activeChild
   let activeResponse
   let activeDone = Promise.resolve()
+  let stopActiveChild = async () => true
   let settleActive
   let pendingRequest
   let closing = false
@@ -200,6 +201,7 @@ export async function createLocalClient(options = {}) {
     activeResponse = response
     pendingRequest = request
     activeDone = new Promise(resolvePromise => { settleActive = resolvePromise })
+    stopActiveChild = () => waitForSettlement(activeDone, shutdownTimeoutMs)
     try {
       const body = await readJson(request)
       if (pendingRequest === request) pendingRequest = undefined
@@ -222,6 +224,9 @@ export async function createLocalClient(options = {}) {
         stdio: ['ignore', 'pipe', 'pipe'],
       })
       activeChild = child
+      const runDone = activeDone
+      let terminationPromise
+      let terminateActiveChild
       response.writeHead(200, {
         'content-type': 'text/plain; charset=utf-8',
         'cache-control': 'no-store',
@@ -235,16 +240,30 @@ export async function createLocalClient(options = {}) {
         activeChild = undefined
         if (activeResponse === response) activeResponse = undefined
         if (pendingRequest === request) pendingRequest = undefined
+        if (stopActiveChild === terminateActiveChild) stopActiveChild = async () => true
         settleActive?.()
         settleActive = undefined
         if (!response.destroyed) response.end(message)
       }
+      terminateActiveChild = () => {
+        if (terminationPromise) return terminationPromise
+        terminationPromise = (async () => {
+          if (settled) return true
+          if (child.exitCode === null) child.kill('SIGTERM')
+          if (await waitForSettlement(runDone, shutdownTimeoutMs)) return true
+          if (child.exitCode === null) child.kill('SIGKILL')
+          if (await waitForSettlement(runDone, shutdownTimeoutMs)) return true
+          return false
+        })()
+        return terminationPromise
+      }
+      stopActiveChild = terminateActiveChild
       child.stdout?.on('data', chunk => response.write(chunk))
       child.stderr?.on('data', chunk => response.write(chunk))
       child.on('error', error => finish(`\n[launcher error] ${error.message}\n`))
       child.on('close', code => finish(`\n[ReproFix exited ${code ?? 'without a code'}]\n`))
       response.on('close', () => {
-        if (!closing && !settled && child.exitCode === null) child.kill()
+        if (!closing && !settled) void terminateActiveChild()
       })
     } catch (error) {
       active = false
@@ -295,24 +314,7 @@ export async function createLocalClient(options = {}) {
       let serverFailure
       const serverClosed = closeServer(server).catch(error => { serverFailure = error })
       pendingRequest?.destroy()
-      if (activeChild?.exitCode === null) activeChild.kill('SIGTERM')
-      let settled = await waitForSettlement(activeDone, shutdownTimeoutMs)
-      let forcedChild = false
-      if (!settled && activeChild?.exitCode === null) {
-        forcedChild = true
-        activeChild.kill('SIGKILL')
-        settled = await waitForSettlement(activeDone, shutdownTimeoutMs)
-      }
-      if (!settled) {
-        activeResponse?.destroy()
-        active = false
-        activeChild = undefined
-        activeResponse = undefined
-        pendingRequest = undefined
-        settleActive?.()
-        settleActive = undefined
-        if (forcedChild) failure ??= new Error('DSH child did not exit after SIGKILL')
-      }
+      if (!(await stopActiveChild())) failure ??= new Error('DSH child did not exit after SIGKILL')
       server.closeIdleConnections?.()
       if (!(await waitForSettlement(serverClosed, shutdownTimeoutMs))) {
         server.closeAllConnections?.()
