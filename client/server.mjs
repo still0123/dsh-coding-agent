@@ -337,6 +337,26 @@ function usage() {
   return 'Usage: dsh-reprofix-client [--port <number>] [--no-open]\n'
 }
 
+export function createShutdownHandler(client, runtime = process) {
+  let shutdownPromise
+  return () => {
+    if (shutdownPromise) return shutdownPromise
+    shutdownPromise = (async () => {
+      try {
+        await client.close()
+        return true
+      } catch (error) {
+        runtime.exitCode = 1
+        try {
+          runtime.stderr.write(`Failed to close ReproFix Local: ${error instanceof Error ? error.message : String(error)}\n`)
+        } catch {}
+        return false
+      }
+    })()
+    return shutdownPromise
+  }
+}
+
 export async function openBrowser(url, platform = process.platform, spawnProcess = spawn) {
   const command = platform === 'win32' ? 'cmd.exe' : platform === 'darwin' ? 'open' : 'xdg-open'
   const args = platform === 'win32' ? ['/d', '/s', '/c', 'start', '', url] : [url]
@@ -379,9 +399,9 @@ async function main() {
   if (!args.includes('--no-open') && !(await openBrowser(url))) {
     process.stderr.write(`Could not open a browser; open ${url} manually.\n`)
   }
-  const shutdown = async () => { await client.close(); process.exit(0) }
-  process.once('SIGINT', shutdown)
-  process.once('SIGTERM', shutdown)
+  const shutdown = createShutdownHandler(client)
+  process.once('SIGINT', () => { void shutdown() })
+  process.once('SIGTERM', () => { void shutdown() })
 }
 
 function isMainModule() {

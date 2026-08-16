@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
-import { buildPrompt, createLocalClient, dshLaunch, openBrowser, validHost, waitForSettlement } from '../client/server.mjs'
+import { buildPrompt, createLocalClient, createShutdownHandler, dshLaunch, openBrowser, validHost, waitForSettlement } from '../client/server.mjs'
 import { apply as applyClientScope, mountReproFix } from '../src/client-scope.js'
 
 class FakeChild extends EventEmitter {
@@ -102,6 +102,29 @@ describe('local client', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('shares concurrent signal shutdown work', async () => {
+    let settle!: () => void
+    const close = vi.fn(() => new Promise<void>(resolvePromise => { settle = resolvePromise }))
+    const shutdown = createShutdownHandler({ close })
+
+    const first = shutdown()
+    const second = shutdown()
+    expect(second).toBe(first)
+    expect(close).toHaveBeenCalledTimes(1)
+    settle()
+    await expect(first).resolves.toBe(true)
+  })
+
+  it('contains shutdown failures and reports a non-zero exit code', async () => {
+    const write = vi.fn()
+    const runtime = { exitCode: undefined as number | undefined, stderr: { write } }
+    const shutdown = createShutdownHandler({ close: async () => { throw new Error('cleanup failed') } }, runtime)
+
+    await expect(shutdown()).resolves.toBe(false)
+    expect(runtime.exitCode).toBe(1)
+    expect(write).toHaveBeenCalledWith('Failed to close ReproFix Local: cleanup failed\n')
   })
 
   it('uses the DSH Node entry on both macOS and Windows without a command shell', () => {
