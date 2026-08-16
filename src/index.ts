@@ -12,7 +12,7 @@ import { executeRepairFailure } from './repair.js'
 import { renderRepairFailureResultMarkdown } from './receipt.js'
 import { createCommandRunner, createGitAdapter } from './runner.js'
 import { FileWorkspaceLock } from './workspace-lock.js'
-import { runWriterWorkflow } from './workflow.js'
+import { runWriterWorkflow, WORKFLOW_SCRIPT_DIGEST } from './workflow.js'
 import type {} from './session.js'
 
 export * from './domain.js'
@@ -194,6 +194,10 @@ export function apply(ctx: Context): void {
           activeRuns,
           workspaceLock,
           runWriter,
+          writerIdentity: {
+            provider: agent.options.provider ?? null,
+            workflowScriptDigest: WORKFLOW_SCRIPT_DIGEST,
+          },
           prepareRun: () => {
             const provider = agent.options.provider
             if (!provider || ctx.llm.listProviders().some((entry) => entry.id === provider)) return

@@ -29,6 +29,10 @@ interface ReprofixReceiptV1 {
     head: string
     clean: boolean
   }
+  writer?: {
+    provider: string | null
+    workflowScriptDigest: `sha256:${string}`
+  }
   reproduction: CommandEvidence
   diagnosis?: {
     summary: string
@@ -53,6 +57,11 @@ blocked runs, and `infrastructure_error`. A Session persistence failure is
 reported to stderr; an uncontrolled crash, `SIGKILL`, or power loss may prevent
 the write. `failureLog` is never stored verbatim; only its digest contributes
 to the input evidence.
+
+When the host provides writer identity, the receipt records the provider id of
+the writer Agent (or `null` when it uses the profile default) and the SHA-256
+digest of the writer workflow script, so the same input can be attributed to
+the exact repair logic that produced it.
 
 ## Command evidence
 

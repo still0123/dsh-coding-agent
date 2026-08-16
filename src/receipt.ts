@@ -85,6 +85,10 @@ export function renderReceiptMarkdown(receipt: ReprofixReceiptV1): string {
     `- Reproduction: ${commandOutcome(receipt.reproduction)}`,
   ]
 
+  if (receipt.writer) {
+    output.push(`- Writer: provider \`${receipt.writer.provider ?? 'profile default'}\`, workflow \`${receipt.writer.workflowScriptDigest}\``)
+  }
+
   if (receipt.diagnosis) {
     output.push('', '### Diagnosis', '', receipt.diagnosis.summary)
     output.push(

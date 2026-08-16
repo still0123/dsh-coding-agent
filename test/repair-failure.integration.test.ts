@@ -78,6 +78,7 @@ function dependencies(options: {
   patches?: PatchSummary[]
   prepareRun?: RepairDependencies['prepareRun']
   reportError?: RepairDependencies['reportError']
+  writerIdentity?: RepairDependencies['writerIdentity']
   writers?: Array<WriterResult | null>
 }) {
   const commands = [...(options.commands ?? [])]
@@ -106,6 +107,7 @@ function dependencies(options: {
     runWriter,
     ...(options.prepareRun === undefined ? {} : { prepareRun: options.prepareRun }),
     ...(options.reportError === undefined ? {} : { reportError: options.reportError }),
+    ...(options.writerIdentity === undefined ? {} : { writerIdentity: options.writerIdentity }),
     runId: () => 'run-1',
     now: () => new Date('2026-08-16T00:00:00.000Z'),
   }
@@ -348,6 +350,25 @@ describe('repair_failure transaction', () => {
     expect(deps.git.baseline).not.toHaveBeenCalled()
     expect(deps.commandRunner.run).not.toHaveBeenCalled()
     expect(deps.runWriter).not.toHaveBeenCalled()
+  })
+
+  it('records writer identity in the receipt when provided', async () => {
+    const deps = dependencies({
+      commands: [evidence('pnpm test repro', { exitCode: 1, combinedOutput: 'different failure\n' })],
+      writerIdentity: { provider: 'deepseek', workflowScriptDigest: 'sha256:workflow' },
+    })
+    const caller = agent()
+    const result = await executeRepairFailure({
+      args: args(), agent: caller, toolCallId: 'call-1', signal: new AbortController().signal, dependencies: deps,
+    })
+
+    expect(result.status).toBe('not_reproduced')
+    expect(caller.session.events.at(-1)).toMatchObject({
+      type: 'reprofix/receipt',
+      data: {
+        writer: { provider: 'deepseek', workflowScriptDigest: 'sha256:workflow' },
+      },
+    })
   })
 
   it('releases the active claim when the first state append fails', async () => {

@@ -1,7 +1,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { WorkflowMeta } from '@deepseek-ai/dsh-workflow'
-import type { CommandEvidence, Diagnosis, PatchSummary } from './domain.js'
+import { sha256Digest, type CommandEvidence, type Diagnosis, type PatchSummary } from './domain.js'
 
 const WRITER_SCHEMA = {
   type: 'object',
@@ -50,6 +50,8 @@ const WORKFLOW_META = {
   description: 'Run one serial writer after exact reproduction.',
   phases: [{ title: 'repair', detail: 'Root cause and minimal patch' }],
 } satisfies WorkflowMeta
+
+export const WORKFLOW_SCRIPT_DIGEST = sha256Digest(REPAIR_WORKFLOW_SCRIPT)
 
 export interface WriterResult {
   outcome: 'patched' | 'blocked'

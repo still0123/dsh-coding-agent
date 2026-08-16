@@ -15,8 +15,9 @@ import {
   type RepairFailureStatus,
   type ReprofixReceiptV1,
   type RunState,
+  type WriterIdentity,
 } from './domain.js'
-import { diagnosisFromWriter, runWriterWorkflow, type WorkflowAttempt } from './workflow.js'
+import { diagnosisFromWriter, runWriterWorkflow, WORKFLOW_SCRIPT_DIGEST, type WorkflowAttempt } from './workflow.js'
 import type { WorkspaceLock } from './workspace-lock.js'
 
 export interface BaselineEvidence {
@@ -54,6 +55,7 @@ export interface RepairDependencies {
   activeRuns: ActiveRunRegistry
   workspaceLock?: WorkspaceLock
   prepareRun?: () => Promise<void> | void
+  writerIdentity?: WriterIdentity
   maxOutputBytes?: number
   runWriter?: typeof runWriterWorkflow
   now?: () => Date
@@ -66,6 +68,7 @@ interface ReceiptContext {
   toolCallId: string
   startedAt: string
   baseline: BaselineEvidence
+  writer?: WriterIdentity
   reproduction: CommandEvidence
   diagnosis?: Diagnosis
   patch?: PatchSummary
@@ -156,6 +159,7 @@ function terminalResult(
     finishedAt,
     inputFingerprint: repairInputFingerprint(input, context.baseline.workspaceRoot),
     baseline: context.baseline,
+    ...(context.writer === undefined ? {} : { writer: context.writer }),
     reproduction: receiptEvidence(context.reproduction),
     ...(context.diagnosis === undefined ? {} : { diagnosis: context.diagnosis }),
     ...(context.patch === undefined ? {} : { patch: context.patch }),
@@ -199,6 +203,7 @@ export async function executeRepairFailure(input: {
     toolCallId,
     startedAt,
     baseline: emptyBaseline,
+    ...(dependencies.writerIdentity === undefined ? {} : { writer: dependencies.writerIdentity }),
     reproduction: notRun(args.repro.command),
     validation: [],
     attempts: 0,

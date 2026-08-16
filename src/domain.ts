@@ -125,6 +125,11 @@ export interface RepairFailureResult {
   residualRisks: string[]
 }
 
+export interface WriterIdentity {
+  provider: string | null
+  workflowScriptDigest: `sha256:${string}`
+}
+
 export interface ReprofixReceiptV1 {
   schemaVersion: 'reprofix.receipt/v1'
   runId: string
@@ -138,6 +143,7 @@ export interface ReprofixReceiptV1 {
     head: string
     clean: boolean
   }
+  writer?: WriterIdentity
   reproduction: CommandEvidence
   diagnosis?: Diagnosis
   patch?: PatchSummary
